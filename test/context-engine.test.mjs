@@ -182,3 +182,56 @@ test("Chinese task queries expand deterministically without a feature definition
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+
+test("specific project aliases outrank generic task noise and migrations", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "cce-query-ranking-"));
+  try {
+    await fs.mkdir(path.join(root, "admin/src/api"), { recursive: true });
+    await fs.mkdir(path.join(root, "migrations"), { recursive: true });
+
+    await fs.writeFile(
+      path.join(root, "admin/src/api/admin-direct-task.ts"),
+      "export function listDirectTaskAssignments() { return request('/admin/direct-tasks/assignments') }\n"
+    );
+    await fs.writeFile(
+      path.join(root, "migrations/000001_direct_tasks.up.sql"),
+      [
+        "CREATE TABLE direct_task_drafts(id bigint);",
+        "CREATE TABLE direct_task_publications(id bigint);",
+        "CREATE TABLE direct_task_recipients(id bigint);",
+        "CREATE TABLE direct_task_items(id bigint);",
+        "CREATE TABLE direct_task_assignments(id bigint);"
+      ].join("\n")
+    );
+    await fs.writeFile(
+      path.join(root, ".context-query-aliases.json"),
+      JSON.stringify({ "人工任务": ["directtask", "direct_task"] }, null, 2)
+    );
+
+    await git(root, "init", "-q");
+    await git(root, "config", "user.email", "test@example.com");
+    await git(root, "config", "user.name", "Test");
+    await git(root, "add", ".");
+    await git(root, "commit", "-qm", "init");
+
+    await indexRepository({ repoRoot: root });
+    const query = queryContext({
+      repoRoot: root,
+      task: "管理端设置了两个人工任务，但是小程序端只显示一个人工任务",
+      maxFiles: 10
+    });
+
+    assert.ok(query.terms.includes("directtask"));
+    assert.ok(query.terms.includes("direct_task"));
+    assert.equal(query.terms.includes("task"), false);
+    assert.equal(query.terms.includes("manual"), false);
+    assert.equal(query.query_expansion.applied_aliases.some((x) => x.source === "project" && x.key === "人工任务"), true);
+    assert.equal(query.must_read[0].path, "admin/src/api/admin-direct-task.ts");
+
+    const migration = query.must_read.find((x) => x.path === "migrations/000001_direct_tasks.up.sql");
+    if (migration) assert.ok(migration.score < query.must_read[0].score);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
