@@ -7,7 +7,8 @@ function loadProjectAliases(repoRoot) {
   const file = path.join(repoRoot, ".context-query-aliases.json");
   if (!fs.existsSync(file)) return {};
   try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    const raw = fs.readFileSync(file, "utf8").replace(/^\uFEFF/, "");
+    const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new Error("root must be an object");
     }
