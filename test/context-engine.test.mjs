@@ -132,3 +132,53 @@ test("Go symbol IDs remain unique for same logical method in different source fi
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+
+test("Chinese task queries expand deterministically without a feature definition", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "cce-query-aliases-"));
+  try {
+    await fs.mkdir(path.join(root, "admin/src"), { recursive: true });
+    await fs.mkdir(path.join(root, "miniprogram/services"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, "admin/src/manualTask.ts"),
+      "export function listManualTasks() { return request('/admin/manual-tasks') }\n"
+    );
+    await fs.writeFile(
+      path.join(root, "miniprogram/services/studentTask.ts"),
+      "export function loadStudentTasks() { return request('/student/tasks') }\n"
+    );
+    await git(root, "init", "-q");
+    await git(root, "config", "user.email", "test@example.com");
+    await git(root, "config", "user.name", "Test");
+    await git(root, "add", ".");
+    await git(root, "commit", "-qm", "init");
+
+    await indexRepository({ repoRoot: root });
+
+    const query = queryContext({
+      repoRoot: root,
+      task: "管理端设置了两个人工任务，但是小程序端只显示一个人工任务",
+      maxFiles: 10
+    });
+
+    assert.ok(query.terms.includes("admin"));
+    assert.ok(query.terms.includes("manualtask"));
+    assert.ok(query.terms.includes("miniprogram"));
+    assert.ok(query.terms.includes("display"));
+    assert.ok(query.coverage.candidate_files > 0);
+    assert.ok(query.must_read.some((x) => x.path === "admin/src/manualTask.ts"));
+    assert.ok(query.must_read.some((x) => x.path === "miniprogram/services/studentTask.ts"));
+    assert.ok(query.query_expansion.applied_aliases.some((x) => x.key === "人工任务"));
+
+    await fs.writeFile(
+      path.join(root, ".context-query-aliases.json"),
+      JSON.stringify({ "定向任务": ["manualtask", "manual_task"] }, null, 2)
+    );
+    const custom = queryContext({ repoRoot: root, task: "定向任务", maxFiles: 10 });
+    assert.ok(custom.terms.includes("manualtask"));
+    assert.ok(custom.must_read.some((x) => x.path === "admin/src/manualTask.ts"));
+    assert.ok(custom.query_expansion.applied_aliases.some((x) => x.source === "project" && x.key === "定向任务"));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
