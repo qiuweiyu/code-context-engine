@@ -2,7 +2,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./schema.js";
-import { rebuildDependencyEdges } from "./edges.js";
+import { rebuildDependencyEdges, rebuildRouteHandlerEdges } from "./edges.js";
 
 function readSchemaVersion(db) {
   const hasMeta = db.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='meta'").get();
@@ -11,8 +11,17 @@ function readSchemaVersion(db) {
   return Number(value ?? 0);
 }
 
+function hasColumn(db, table, column) {
+  return db.prepare(`PRAGMA table_info(${table})`).all().some((row) => row.name === column);
+}
+
 function migrateSchema(db, previousVersion) {
   if (previousVersion < 4) rebuildDependencyEdges(db);
+  if (previousVersion < 5) {
+    if (!hasColumn(db, "routes", "handler_ref")) db.exec("ALTER TABLE routes ADD COLUMN handler_ref TEXT");
+    if (!hasColumn(db, "routes", "handler_symbol_id")) db.exec("ALTER TABLE routes ADD COLUMN handler_symbol_id TEXT");
+    rebuildRouteHandlerEdges(db);
+  }
 }
 
 export function openStore(indexDir) {

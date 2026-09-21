@@ -338,13 +338,13 @@ test("project anchor retrieval limits generic admin/list noise", async () => {
 });
 
 
-test("schema v4 backfills typed edges from existing dependencies without reindexing", async () => {
+test("schema migration backfills dependency typed edges without reindexing", async () => {
   const root = await fixture();
   const indexDir = path.join(root, ".context-index");
   const dbPath = path.join(indexDir, "index.sqlite");
   try {
     const first = await indexRepository({ repoRoot: root });
-    assert.equal(first.manifest.schema_version, 4);
+    assert.equal(first.manifest.schema_version, 5);
     assert.ok(first.manifest.counts.edges > 0);
 
     const edgeLines = (await fs.readFile(path.join(indexDir, "edges.jsonl"), "utf8"))
@@ -369,10 +369,10 @@ test("schema v4 backfills typed edges from existing dependencies without reindex
     try {
       assert.equal(
         migrated.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get().value,
-        "4"
+        "5"
       );
       assert.equal(
-        migrated.db.prepare("SELECT COUNT(*) AS n FROM edges").get().n,
+        migrated.db.prepare("SELECT COUNT(*) AS n FROM edges WHERE source_kind='dependency'").get().n,
         legacyDependencyCount
       );
       assert.equal(
@@ -390,6 +390,136 @@ test("schema v4 backfills typed edges from existing dependencies without reindex
         "SELECT edge_id FROM edges WHERE confidence='unresolved' LIMIT 1"
       ).get();
       assert.ok(unresolved);
+    } finally {
+      migrated.db.close();
+    }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+
+test("HTTP route registrations resolve typed route_handler edges by receiver parameter type", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "cce-route-handler-"));
+  try {
+    await fs.mkdir(path.join(root, "backend"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, "backend/api.go"),
+      [
+        "package backend",
+        "import \"net/http\"",
+        "type API struct{}",
+        "type OtherAPI struct{}",
+        "func (api *API) List(w http.ResponseWriter, r *http.Request) {}",
+        "func (api *OtherAPI) List(w http.ResponseWriter, r *http.Request) {}"
+      ].join("\n") + "\n"
+    );
+    await fs.writeFile(
+      path.join(root, "backend/router.go"),
+      [
+        "package backend",
+        "import \"net/http\"",
+        "type Router struct{}",
+        "func register(router *Router, api *API) {",
+        "  router.Handle(http.MethodGet, \"/api/items\", http.HandlerFunc(api.List))",
+        "  router.HandlePattern(http.MethodGet, \"/api/ambiguous/{id}\", http.HandlerFunc(external.List))",
+        "}"
+      ].join("\n") + "\n"
+    );
+    await git(root, "init", "-q");
+    await git(root, "config", "user.email", "test@example.com");
+    await git(root, "config", "user.name", "Test");
+    await git(root, "add", ".");
+    await git(root, "commit", "-qm", "init");
+
+    const result = await indexRepository({ repoRoot: root });
+    assert.equal(result.manifest.schema_version, 5);
+
+    const db = new DatabaseSync(path.join(root, ".context-index/index.sqlite"));
+    try {
+      const resolvedRoute = db.prepare(
+        "SELECT * FROM routes WHERE route_path='/api/items'"
+      ).get();
+      assert.equal(resolvedRoute.method, "GET");
+      assert.equal(resolvedRoute.direction, "server");
+      assert.equal(resolvedRoute.handler_ref, "api.List");
+      assert.equal(resolvedRoute.handler_symbol_id, "go:backend/api.go::*API.List");
+
+      const resolvedEdge = db.prepare(
+        "SELECT * FROM edges WHERE source_kind='route' AND source_id=?"
+      ).get(resolvedRoute.id);
+      assert.equal(resolvedEdge.type, "route_handler");
+      assert.equal(resolvedEdge.confidence, "static");
+      assert.equal(resolvedEdge.from_node_id, "route:server:GET:/api/items");
+      assert.equal(resolvedEdge.to_node_id, "symbol:go:backend/api.go::*API.List");
+      assert.equal(JSON.parse(resolvedEdge.evidence_json).resolution, "receiver_parameter_type");
+
+      const unresolvedRoute = db.prepare(
+        "SELECT * FROM routes WHERE route_path='/api/ambiguous/{id}'"
+      ).get();
+      assert.equal(unresolvedRoute.handler_ref, "external.List");
+      assert.equal(unresolvedRoute.handler_symbol_id, null);
+
+      const unresolvedEdge = db.prepare(
+        "SELECT * FROM edges WHERE source_kind='route' AND source_id=?"
+      ).get(unresolvedRoute.id);
+      assert.equal(unresolvedEdge.type, "route_handler");
+      assert.equal(unresolvedEdge.confidence, "unresolved");
+      assert.equal(JSON.parse(unresolvedEdge.evidence_json).resolution, "receiver_not_resolved");
+    } finally {
+      db.close();
+    }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("schema v5 adds route handler columns and backfills route edges without changing indexed_at", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "cce-route-migration-"));
+  const indexDir = path.join(root, ".context-index");
+  await fs.mkdir(indexDir, { recursive: true });
+  const dbPath = path.join(indexDir, "index.sqlite");
+  try {
+    const legacy = new DatabaseSync(dbPath);
+    legacy.exec(`
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
+      CREATE TABLE files (
+        path TEXT PRIMARY KEY,
+        language TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        line_count INTEGER NOT NULL,
+        parser_version TEXT NOT NULL,
+        indexed_at TEXT NOT NULL,
+        is_test INTEGER NOT NULL DEFAULT 0 CHECK (is_test IN (0,1))
+      ) STRICT;
+      CREATE TABLE routes (
+        id INTEGER PRIMARY KEY,
+        file_path TEXT NOT NULL REFERENCES files(path) ON DELETE CASCADE,
+        symbol_id TEXT,
+        method TEXT NOT NULL,
+        route_path TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        line INTEGER NOT NULL
+      ) STRICT;
+    `);
+    legacy.prepare("INSERT INTO meta(key,value) VALUES('schema_version','4')").run();
+    legacy.prepare("INSERT INTO meta(key,value) VALUES('last_indexed_at','2026-09-21T00:00:00.000Z')").run();
+    legacy.close();
+
+    const migrated = openStore(indexDir);
+    try {
+      const columns = migrated.db.prepare("PRAGMA table_info(routes)").all().map((row) => row.name);
+      assert.ok(columns.includes("handler_ref"));
+      assert.ok(columns.includes("handler_symbol_id"));
+      assert.equal(
+        migrated.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get().value,
+        "5"
+      );
+      assert.equal(
+        migrated.db.prepare("SELECT value FROM meta WHERE key='last_indexed_at'").get().value,
+        "2026-09-21T00:00:00.000Z"
+      );
     } finally {
       migrated.db.close();
     }

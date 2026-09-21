@@ -12,7 +12,7 @@ import { analyzeScriptFile } from "./analyze-script.js";
 import { extractDbObjects, extractRoutes } from "./analyze-common.js";
 import { loadFeatureDefinitions, markFeaturesForFileChange, markFeaturesForSymbolChange, refreshFeatureStatus, syncFeatureDefinitions } from "./features.js";
 import { exportIndex } from "./export.js";
-import { rebuildDependencyEdges } from "./edges.js";
+import { rebuildDependencyEdges, rebuildRouteHandlerEdges } from "./edges.js";
 
 async function readLocalSource(repoRoot, relPath) {
   const full = path.resolve(repoRoot, relPath);
@@ -41,8 +41,10 @@ function insertAnalysis(db, relPath, language, hash, text, analysis, now) {
   for (const dep of analysis.dependencies ?? []) depStmt.run(relPath, dep.from_symbol_id ?? null, dep.relation, dep.to_ref, dep.to_file ?? null, null);
 
   const symbols = analysis.symbols ?? [];
-  const routeStmt = db.prepare(`INSERT INTO routes(file_path,symbol_id,method,route_path,direction,line) VALUES(?,?,?,?,?,?)`);
-  for (const route of extractRoutes(text, relPath, symbols)) routeStmt.run(relPath, route.symbol_id, route.method, route.route_path, route.direction, route.line);
+  const routeStmt = db.prepare(`INSERT INTO routes(file_path,symbol_id,method,route_path,direction,line,handler_ref,handler_symbol_id) VALUES(?,?,?,?,?,?,?,?)`);
+  for (const route of extractRoutes(text, relPath, symbols)) {
+    routeStmt.run(relPath, route.symbol_id, route.method, route.route_path, route.direction, route.line, route.handler_ref ?? null, null);
+  }
 
   const dbStmt = db.prepare(`INSERT INTO db_objects(file_path,symbol_id,object_type,object_name,operation,line) VALUES(?,?,?,?,?,?)`);
   for (const obj of extractDbObjects(text, relPath, symbols)) dbStmt.run(relPath, obj.symbol_id, obj.object_type, obj.object_name, obj.operation, obj.line);
@@ -161,6 +163,7 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
       resolveDependencies(db);
       rebuildTestMappings(db);
       rebuildDependencyEdges(db);
+      rebuildRouteHandlerEdges(db);
     });
 
     const definitions = await loadFeatureDefinitions(gitRoot);

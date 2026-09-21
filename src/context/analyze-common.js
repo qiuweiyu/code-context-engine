@@ -26,9 +26,65 @@ export function extractDbObjects(text, filePath, symbols = []) {
   return out;
 }
 
+function handlerReference(expression) {
+  const value = String(expression ?? "");
+  const wrapped = value.match(/\bHandlerFunc\s*\(\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/);
+  if (wrapped) return wrapped[1];
+
+  const direct = value.trim().match(/^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\b/);
+  return direct?.[1] ?? null;
+}
+
+function addRoute(out, seen, text, filePath, symbols, route) {
+  const routePath = String(route.route_path ?? "");
+  if (!routePath || (!routePath.startsWith("/") && !routePath.startsWith("http"))) return;
+  const line = lineOf(text, route.index ?? 0);
+  const method = String(route.method ?? "ANY").toUpperCase();
+  const direction = route.direction;
+  const key = `${direction}:${method}:${routePath}:${line}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+  out.push({
+    file_path: filePath,
+    symbol_id: nearestSymbol(symbols, line),
+    method,
+    route_path: routePath,
+    direction,
+    line,
+    handler_ref: route.handler_ref ?? null
+  });
+}
+
 export function extractRoutes(text, filePath, symbols = []) {
   const out = [];
   const seen = new Set();
+
+  // Go/custom-router style:
+  // router.Handle(http.MethodGet, "/path", wrapper(http.HandlerFunc(api.List)))
+  // router.HandlePattern(http.MethodPost, "/path/{id}", http.HandlerFunc(api.Update))
+  const handlePattern = /\b(?:[A-Za-z_$][\w$]*\.)?(?:Handle|HandlePattern)\s*\(\s*(?:http\.)?Method(Get|Post|Put|Patch|Delete|Options|Head)\s*,\s*["'`]([^"'`]+)["'`]\s*,([\s\S]{0,1200}?)(?=\)\s*(?:;|\r?\n|$))/g;
+  for (const match of text.matchAll(handlePattern)) {
+    addRoute(out, seen, text, filePath, symbols, {
+      index: match.index,
+      direction: "server",
+      method: match[1],
+      route_path: match[2],
+      handler_ref: handlerReference(match[3])
+    });
+  }
+
+  // Common router style: router.GET("/path", api.List)
+  const methodHandlerPattern = /\.((?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD))\s*\(\s*["'`]([^"'`]+)["'`]\s*,\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/gi;
+  for (const match of text.matchAll(methodHandlerPattern)) {
+    addRoute(out, seen, text, filePath, symbols, {
+      index: match.index,
+      direction: "server",
+      method: match[1],
+      route_path: match[2],
+      handler_ref: match[3]
+    });
+  }
+
   const patterns = [
     ["server", /\b(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s*\(\s*["'`]([^"'`]+)["'`]/g, null],
     ["server", /\.(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s*\(\s*["'`]([^"'`]+)["'`]/gi, 1],
@@ -48,12 +104,13 @@ export function extractRoutes(text, filePath, symbols = []) {
         const prefix = match[0].match(/\b(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\b/i)?.[1];
         if (prefix) method = prefix.toUpperCase();
       }
-      if (!routePath || (!routePath.startsWith("/") && !routePath.startsWith("http"))) continue;
-      const line = lineOf(text, match.index ?? 0);
-      const key = `${direction}:${method}:${routePath}:${line}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ file_path: filePath, symbol_id: nearestSymbol(symbols, line), method, route_path: routePath, direction, line });
+      addRoute(out, seen, text, filePath, symbols, {
+        index: match.index,
+        direction,
+        method,
+        route_path: routePath,
+        handler_ref: null
+      });
     }
   }
   return out;
