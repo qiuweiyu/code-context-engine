@@ -1,0 +1,26 @@
+{
+  "name": "code-context-engine",
+  "version": "0.1.0",
+  "description": "Local-first static code knowledge engine: symbols, calls, routes, data objects, tests, and feature flows without LLMs or source upload.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "cce": "src/cli.js",
+    "code-context-engine": "src/cli.js",
+    "code-context-engine-mcp": "src/server.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start:mcp": "node src/server.js",
+    "test": "node --test test/*.test.mjs",
+    "index": "node src/cli.js index",
+    "query": "node src/cli.js query",
+    "status": "node src/cli.js status"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "zod": "^3.25.0"
+  }
+}
