@@ -20,6 +20,9 @@ function migrateSchema(db, previousVersion) {
   if (previousVersion < 5) {
     if (!hasColumn(db, "routes", "handler_ref")) db.exec("ALTER TABLE routes ADD COLUMN handler_ref TEXT");
     if (!hasColumn(db, "routes", "handler_symbol_id")) db.exec("ALTER TABLE routes ADD COLUMN handler_symbol_id TEXT");
+  }
+  if (previousVersion < 6) {
+    if (!hasColumn(db, "routes", "handler_owner_type")) db.exec("ALTER TABLE routes ADD COLUMN handler_owner_type TEXT");
     rebuildRouteHandlerEdges(db);
   }
 }

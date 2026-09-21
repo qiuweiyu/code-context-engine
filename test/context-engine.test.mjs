@@ -344,7 +344,7 @@ test("schema migration backfills dependency typed edges without reindexing", asy
   const dbPath = path.join(indexDir, "index.sqlite");
   try {
     const first = await indexRepository({ repoRoot: root });
-    assert.equal(first.manifest.schema_version, 5);
+    assert.equal(first.manifest.schema_version, 6);
     assert.ok(first.manifest.counts.edges > 0);
 
     const edgeLines = (await fs.readFile(path.join(indexDir, "edges.jsonl"), "utf8"))
@@ -369,7 +369,7 @@ test("schema migration backfills dependency typed edges without reindexing", asy
     try {
       assert.equal(
         migrated.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get().value,
-        "5"
+        "6"
       );
       assert.equal(
         migrated.db.prepare("SELECT COUNT(*) AS n FROM edges WHERE source_kind='dependency'").get().n,
@@ -411,7 +411,11 @@ test("HTTP route registrations resolve typed route_handler edges by receiver par
         "type API struct{}",
         "type OtherAPI struct{}",
         "func (api *API) List(w http.ResponseWriter, r *http.Request) {}",
-        "func (api *OtherAPI) List(w http.ResponseWriter, r *http.Request) {}"
+        "func (api *OtherAPI) List(w http.ResponseWriter, r *http.Request) {}",
+        "func (api *API) register(router *Router) {",
+        "  router.Handle(http.MethodGet, \"/api/method-items\", http.HandlerFunc(api.List))",
+        "  router.Handle(http.MethodGet, \"/api/local-other\", http.HandlerFunc(other.List))",
+        "}"
       ].join("\n") + "\n"
     );
     await fs.writeFile(
@@ -433,7 +437,7 @@ test("HTTP route registrations resolve typed route_handler edges by receiver par
     await git(root, "commit", "-qm", "init");
 
     const result = await indexRepository({ repoRoot: root });
-    assert.equal(result.manifest.schema_version, 5);
+    assert.equal(result.manifest.schema_version, 6);
 
     const db = new DatabaseSync(path.join(root, ".context-index/index.sqlite"));
     try {
@@ -453,6 +457,31 @@ test("HTTP route registrations resolve typed route_handler edges by receiver par
       assert.equal(resolvedEdge.from_node_id, "route:server:GET:/api/items");
       assert.equal(resolvedEdge.to_node_id, "symbol:go:backend/api.go::*API.List");
       assert.equal(JSON.parse(resolvedEdge.evidence_json).resolution, "receiver_parameter_type");
+
+      const methodRoute = db.prepare(
+        "SELECT * FROM routes WHERE route_path='/api/method-items'"
+      ).get();
+      assert.equal(methodRoute.handler_ref, "api.List");
+      assert.equal(methodRoute.handler_owner_type, "*API");
+      assert.equal(methodRoute.handler_symbol_id, "go:backend/api.go::*API.List");
+
+      const methodEdge = db.prepare(
+        "SELECT * FROM edges WHERE source_kind='route' AND source_id=?"
+      ).get(methodRoute.id);
+      assert.equal(methodEdge.confidence, "static");
+      assert.equal(JSON.parse(methodEdge.evidence_json).resolution, "method_receiver_type");
+
+      const localOtherRoute = db.prepare(
+        "SELECT * FROM routes WHERE route_path='/api/local-other'"
+      ).get();
+      assert.equal(localOtherRoute.handler_ref, "other.List");
+      assert.equal(localOtherRoute.handler_owner_type, null);
+      assert.equal(localOtherRoute.handler_symbol_id, null);
+
+      const localOtherEdge = db.prepare(
+        "SELECT * FROM edges WHERE source_kind='route' AND source_id=?"
+      ).get(localOtherRoute.id);
+      assert.equal(localOtherEdge.confidence, "unresolved");
 
       const unresolvedRoute = db.prepare(
         "SELECT * FROM routes WHERE route_path='/api/ambiguous/{id}'"
@@ -474,7 +503,7 @@ test("HTTP route registrations resolve typed route_handler edges by receiver par
   }
 });
 
-test("schema v5 adds route handler columns and backfills route edges without changing indexed_at", async () => {
+test("schema v6 adds route handler owner metadata without changing indexed_at", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "cce-route-migration-"));
   const indexDir = path.join(root, ".context-index");
   await fs.mkdir(indexDir, { recursive: true });
@@ -512,9 +541,10 @@ test("schema v5 adds route handler columns and backfills route edges without cha
       const columns = migrated.db.prepare("PRAGMA table_info(routes)").all().map((row) => row.name);
       assert.ok(columns.includes("handler_ref"));
       assert.ok(columns.includes("handler_symbol_id"));
+      assert.ok(columns.includes("handler_owner_type"));
       assert.equal(
         migrated.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get().value,
-        "5"
+        "6"
       );
       assert.equal(
         migrated.db.prepare("SELECT value FROM meta WHERE key='last_indexed_at'").get().value,

@@ -121,7 +121,16 @@ function routeHandlerResolution(db, route, symbolsByName, symbolsByQualified) {
   const parts = raw.split(".");
   const member = parts.at(-1);
   if (parts.length > 1 && route.symbol_id) {
-    const registration = db.prepare("SELECT params_json FROM symbols WHERE symbol_id=?").get(route.symbol_id);
+    const registration = db.prepare("SELECT params_json,receiver FROM symbols WHERE symbol_id=?").get(route.symbol_id);
+    if (route.handler_owner_type) {
+      const ownerType = typeBase(route.handler_owner_type);
+      const candidates = (symbolsByName.get(member) ?? []).filter(
+        (symbol) => typeBase(symbol.receiver) === ownerType
+      );
+      if (candidates.length === 1) {
+        return { symbol_id: candidates[0].symbol_id, confidence: "static", resolution: "method_receiver_type" };
+      }
+    }
     if (registration?.params_json) {
       const params = JSON.parse(registration.params_json);
       const receiverVariable = parts[0];

@@ -35,6 +35,17 @@ function handlerReference(expression) {
   return direct?.[1] ?? null;
 }
 
+function methodReceiverOwnerType(text, symbol, handlerRef) {
+  if (!symbol?.receiver || !handlerRef?.includes(".")) return null;
+  const root = String(handlerRef).split(".")[0];
+  const lines = text.split(/\r?\n/);
+  const start = Math.max(0, Number(symbol.line_start ?? 1) - 1);
+  const header = lines.slice(start, start + 4).join("\n").split("{", 1)[0];
+  const match = header.match(/\bfunc\s*\(\s*([A-Za-z_$][\w$]*)\s+[^)]+\)\s*[A-Za-z_$][\w$]*\s*\(/);
+  if (!match || match[1] !== root) return null;
+  return symbol.receiver;
+}
+
 function addRoute(out, seen, text, filePath, symbols, route) {
   const routePath = String(route.route_path ?? "");
   if (!routePath || (!routePath.startsWith("/") && !routePath.startsWith("http"))) return;
@@ -44,14 +55,17 @@ function addRoute(out, seen, text, filePath, symbols, route) {
   const key = `${direction}:${method}:${routePath}:${line}`;
   if (seen.has(key)) return;
   seen.add(key);
+  const symbolId = nearestSymbol(symbols, line);
+  const ownerSymbol = symbolId ? symbols.find((symbol) => symbol.symbol_id === symbolId) : null;
   out.push({
     file_path: filePath,
-    symbol_id: nearestSymbol(symbols, line),
+    symbol_id: symbolId,
     method,
     route_path: routePath,
     direction,
     line,
-    handler_ref: route.handler_ref ?? null
+    handler_ref: route.handler_ref ?? null,
+    handler_owner_type: methodReceiverOwnerType(text, ownerSymbol, route.handler_ref ?? null)
   });
 }
 

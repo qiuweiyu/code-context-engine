@@ -41,9 +41,19 @@ function insertAnalysis(db, relPath, language, hash, text, analysis, now) {
   for (const dep of analysis.dependencies ?? []) depStmt.run(relPath, dep.from_symbol_id ?? null, dep.relation, dep.to_ref, dep.to_file ?? null, null);
 
   const symbols = analysis.symbols ?? [];
-  const routeStmt = db.prepare(`INSERT INTO routes(file_path,symbol_id,method,route_path,direction,line,handler_ref,handler_symbol_id) VALUES(?,?,?,?,?,?,?,?)`);
+  const routeStmt = db.prepare(`INSERT INTO routes(file_path,symbol_id,method,route_path,direction,line,handler_ref,handler_owner_type,handler_symbol_id) VALUES(?,?,?,?,?,?,?,?,?)`);
   for (const route of extractRoutes(text, relPath, symbols)) {
-    routeStmt.run(relPath, route.symbol_id, route.method, route.route_path, route.direction, route.line, route.handler_ref ?? null, null);
+    routeStmt.run(
+      relPath,
+      route.symbol_id,
+      route.method,
+      route.route_path,
+      route.direction,
+      route.line,
+      route.handler_ref ?? null,
+      route.handler_owner_type ?? null,
+      null
+    );
   }
 
   const dbStmt = db.prepare(`INSERT INTO db_objects(file_path,symbol_id,object_type,object_name,operation,line) VALUES(?,?,?,?,?,?)`);

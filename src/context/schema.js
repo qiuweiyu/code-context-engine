@@ -1,5 +1,5 @@
-export const SCHEMA_VERSION = 5;
-export const PARSER_VERSION = "0.2.0";
+export const SCHEMA_VERSION = 6;
+export const PARSER_VERSION = "0.2.1";
 
 export const SCHEMA_SQL = `
 PRAGMA foreign_keys = ON;
@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS routes (
   direction TEXT NOT NULL,
   line INTEGER NOT NULL,
   handler_ref TEXT,
+  handler_owner_type TEXT,
   handler_symbol_id TEXT
 ) STRICT;
 CREATE INDEX IF NOT EXISTS idx_routes_path ON routes(route_path);
