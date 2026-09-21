@@ -1,6 +1,6 @@
 {
   "name": "code-context-engine",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Local-first static code knowledge engine: symbols, calls, routes, data objects, tests, and feature flows without LLMs or source upload.",
   "type": "module",
   "license": "MIT",
