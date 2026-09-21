@@ -8,6 +8,8 @@ Code Context Engine (CCE) is a local-first static analysis tool that builds a st
 
 CCE is designed for both humans and coding agents. The core indexing path is deterministic and does not require an AI model or external API.
 
+**Quick Start:** [docs/QUICKSTART.md](docs/QUICKSTART.md) · [中文快速开始](docs/QUICKSTART-ZH.md)
+
 
 ## Why
 
