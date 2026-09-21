@@ -37,7 +37,7 @@ CCE turns those facts into a local machine-readable index that can be refreshed 
 
 ## Current status
 
-`v0.1.2` is an early open-source baseline.
+`v0.1.3` is an early open-source baseline.
 
 Current deep analyzers:
 
