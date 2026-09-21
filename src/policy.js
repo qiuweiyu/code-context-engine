@@ -9,7 +9,7 @@ export const SOURCE_EXTENSIONS = new Set([
 
 export const BLOCKED_BASENAMES = new Set([
   ".env", ".env.local", ".env.production", ".env.development", ".npmrc", ".pypirc",
-  "id_rsa", "id_ed25519", "credentials", "credentials.json", "secrets.json"
+  "id_rsa", "id_ed25519", "credentials", "credentials.json", "secrets.json", ".context-query-aliases.json"
 ]);
 
 export const BLOCKED_SUFFIXES = [
