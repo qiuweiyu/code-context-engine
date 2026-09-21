@@ -1,5 +1,5 @@
 export const SCHEMA_VERSION = 6;
-export const PARSER_VERSION = "0.2.1";
+export const PARSER_VERSION = "0.2.2";
 
 export const SCHEMA_SQL = `
 PRAGMA foreign_keys = ON;

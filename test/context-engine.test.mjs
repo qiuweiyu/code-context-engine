@@ -557,3 +557,104 @@ test("schema v6 adds route handler owner metadata without changing indexed_at", 
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+
+test("frontend requests resolve to backend routes through method and normalized path shape", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "cce-api-request-"));
+  try {
+    await fs.mkdir(path.join(root, "backend"), { recursive: true });
+    await fs.mkdir(path.join(root, "web/api"), { recursive: true });
+
+    await fs.writeFile(
+      path.join(root, "backend/router.go"),
+      [
+        "package backend",
+        "import \"net/http\"",
+        "type Router struct{}",
+        "type API struct{}",
+        "func (api *API) Get(w http.ResponseWriter, r *http.Request) {}",
+        "func (api *API) Create(w http.ResponseWriter, r *http.Request) {}",
+        "func register(router *Router, api *API) {",
+        "  router.HandlePattern(http.MethodGet, \"/api/items/{item_id}\", http.HandlerFunc(api.Get))",
+        "  router.Handle(http.MethodPost, \"/api/items\", http.HandlerFunc(api.Create))",
+        "}"
+      ].join("\n") + "\n"
+    );
+
+    await fs.writeFile(
+      path.join(root, "web/api/items.ts"),
+      [
+        "const base = '/api/items'",
+        "export async function getItem(id: string) {",
+        "  return requestJson<unknown>(\`${base}/${id}?verbose=1\`, { method: 'GET' })",
+        "}",
+        "export async function createItem() {",
+        "  return requestJson('/api/items', { method: 'POST', body: {} })",
+        "}",
+        "export async function unknownMethod() {",
+        "  return requestJson('/api/items')",
+        "}"
+      ].join("\n") + "\n"
+    );
+
+    await git(root, "init", "-q");
+    await git(root, "config", "user.email", "test@example.com");
+    await git(root, "config", "user.name", "Test");
+    await git(root, "add", ".");
+    await git(root, "commit", "-qm", "init");
+
+    const result = await indexRepository({ repoRoot: root });
+    assert.equal(result.manifest.schema_version, 6);
+
+    const db = new DatabaseSync(path.join(root, ".context-index/index.sqlite"));
+    try {
+      const parserVersions = db.prepare(
+        "SELECT DISTINCT parser_version FROM files ORDER BY parser_version"
+      ).all().map((row) => row.parser_version);
+      assert.deepEqual(parserVersions, ["0.2.2"]);
+
+      const getClient = db.prepare(
+        "SELECT * FROM routes WHERE direction='client' AND symbol_id LIKE '%::getItem'"
+      ).get();
+      assert.equal(getClient.method, "GET");
+      assert.equal(getClient.route_path, "/api/items/{param}");
+
+      const getEdge = db.prepare(
+        "SELECT * FROM edges WHERE source_kind='client_route' AND source_id=?"
+      ).get(getClient.id);
+      assert.equal(getEdge.type, "api_request");
+      assert.equal(getEdge.confidence, "static");
+      assert.equal(getEdge.from_node_id, "symbol:typescript:web/api/items.ts::getItem");
+      assert.equal(getEdge.to_node_id, "route:server:GET:/api/items/{item_id}");
+      assert.equal(JSON.parse(getEdge.evidence_json).resolution, "method_path_shape");
+
+      const createClient = db.prepare(
+        "SELECT * FROM routes WHERE direction='client' AND symbol_id LIKE '%::createItem'"
+      ).get();
+      assert.equal(createClient.method, "POST");
+      assert.equal(createClient.route_path, "/api/items");
+
+      const createEdge = db.prepare(
+        "SELECT * FROM edges WHERE source_kind='client_route' AND source_id=?"
+      ).get(createClient.id);
+      assert.equal(createEdge.confidence, "static");
+      assert.equal(JSON.parse(createEdge.evidence_json).resolution, "method_exact_path");
+      assert.equal(createEdge.to_node_id, "route:server:POST:/api/items");
+
+      const unknownClient = db.prepare(
+        "SELECT * FROM routes WHERE direction='client' AND symbol_id LIKE '%::unknownMethod'"
+      ).get();
+      assert.equal(unknownClient.method, "ANY");
+
+      const unknownEdge = db.prepare(
+        "SELECT * FROM edges WHERE source_kind='client_route' AND source_id=?"
+      ).get(unknownClient.id);
+      assert.equal(unknownEdge.confidence, "unresolved");
+      assert.equal(JSON.parse(unknownEdge.evidence_json).resolution, "method_unresolved");
+    } finally {
+      db.close();
+    }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

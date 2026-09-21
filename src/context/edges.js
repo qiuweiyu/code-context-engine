@@ -210,3 +210,77 @@ export function rebuildRouteHandlerEdges(db) {
     );
   }
 }
+
+
+function routePathShape(routePath) {
+  return String(routePath ?? "")
+    .split("#", 1)[0]
+    .split("?", 1)[0]
+    .replace(/\{[^/{}]+\}/g, "{}");
+}
+
+export function rebuildApiRequestEdges(db) {
+  db.prepare("DELETE FROM edges WHERE source_kind='client_route'").run();
+
+  const serverRoutes = db.prepare(
+    "SELECT id,method,route_path FROM routes WHERE direction='server' ORDER BY id"
+  ).all();
+  const clientRoutes = db.prepare(
+    "SELECT * FROM routes WHERE direction='client' ORDER BY id"
+  ).all();
+  const insert = db.prepare(`INSERT INTO edges(edge_id,from_node_id,to_node_id,type,confidence,evidence_json,source_kind,source_id)
+    VALUES(?,?,?,?,?,?,?,?)`);
+
+  for (const client of clientRoutes) {
+    const method = String(client.method ?? "ANY").toUpperCase();
+    const clientShape = routePathShape(client.route_path);
+    let candidates = [];
+    let resolution = "route_not_found";
+
+    if (method === "ANY") {
+      candidates = serverRoutes.filter((route) => routePathShape(route.route_path) === clientShape);
+      resolution = "method_unresolved";
+    } else {
+      candidates = serverRoutes.filter(
+        (route) =>
+          String(route.method).toUpperCase() === method
+          && routePathShape(route.route_path) === clientShape
+      );
+      resolution = candidates.length === 1
+        ? (candidates[0].route_path === client.route_path ? "method_exact_path" : "method_path_shape")
+        : (candidates.length > 1 ? "route_not_unique" : "route_not_found");
+    }
+
+    const resolved = method !== "ANY" && candidates.length === 1 ? candidates[0] : null;
+    const fromNode = client.symbol_id
+      ? `symbol:${client.symbol_id}`
+      : `file:${client.file_path}`;
+    const toNode = resolved
+      ? `route:server:${resolved.method}:${resolved.route_path}`
+      : `ref:api_request:${method}:${client.route_path}`;
+
+    const evidence = {
+      type: resolved ? "static_resolution" : "unresolved_reference",
+      source: "routes",
+      source_id: client.id,
+      file: client.file_path,
+      line: client.line,
+      method,
+      client_route_path: client.route_path,
+      server_route_id: resolved?.id ?? null,
+      server_route_path: resolved?.route_path ?? null,
+      resolution
+    };
+
+    insert.run(
+      `api_request:${client.id}`,
+      fromNode,
+      toNode,
+      "api_request",
+      resolved ? "static" : "unresolved",
+      JSON.stringify(evidence),
+      "client_route",
+      client.id
+    );
+  }
+}
