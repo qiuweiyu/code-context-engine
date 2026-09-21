@@ -28,13 +28,32 @@ function textScore(text, terms, weight = 1) {
   return score;
 }
 
-function addFile(map, file, score, reason, symbol = null) {
+function addFile(map, file, score, reason, symbol = null, channel = "misc") {
   if (!file) return;
-  const current = map.get(file) ?? { path: file, score: 0, reasons: [], symbols: new Set() };
-  current.score += score;
+  const current = map.get(file) ?? {
+    path: file,
+    score: 0,
+    reasons: [],
+    symbols: new Set(),
+    channel_scores: Object.create(null)
+  };
+  current.channel_scores[channel] = Math.max(current.channel_scores[channel] ?? 0, score);
+  current.score = Object.values(current.channel_scores).reduce((sum, value) => sum + Number(value), 0);
   if (reason && !current.reasons.includes(reason)) current.reasons.push(reason);
   if (symbol) current.symbols.add(symbol);
   map.set(file, current);
+}
+
+function fileScoreMultiplier(filePath, terms) {
+  const normalized = String(filePath ?? "").replaceAll("\\", "/").toLowerCase();
+  const dbIntent = terms.some((term) =>
+    ["migration", "migrations", "schema", "database", "sql", "table", "数据库", "迁移", "表结构"].includes(term)
+  );
+  if (dbIntent) return 1;
+  if (/(^|\/)migrations?\//.test(normalized)) {
+    return /\.down\.sql$/.test(normalized) ? 0.12 : 0.25;
+  }
+  return 1;
 }
 
 export function queryContext({ repoRoot, task, indexDir = ".context-index", maxFiles = 12 }) {
@@ -60,8 +79,8 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       for (const step of feature.steps) {
         if (step.symbol_id) {
           const symbol = db.prepare("SELECT * FROM symbols WHERE symbol_id=?").get(step.symbol_id);
-          if (symbol) addFile(files, symbol.file_path, 24 + feature.score * 0.15, `feature:${feature.feature_id}`, symbol.symbol_id);
-        } else if (step.file_path) addFile(files, step.file_path, 16, `feature:${feature.feature_id}`);
+          if (symbol) addFile(files, symbol.file_path, 24 + feature.score * 0.15, `feature:${feature.feature_id}`, symbol.symbol_id, "feature");
+        } else if (step.file_path) addFile(files, step.file_path, 16, `feature:${feature.feature_id}`, null, "feature");
       }
     }
 
@@ -72,35 +91,43 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       if (score > 0) rankedSymbols.push({ ...symbol, score });
     }
     rankedSymbols.sort((a,b)=>b.score-a.score);
-    for (const symbol of rankedSymbols.slice(0, 20)) addFile(files, symbol.file_path, symbol.score, "symbol_match", symbol.symbol_id);
+    for (const symbol of rankedSymbols.slice(0, 20)) addFile(files, symbol.file_path, symbol.score, "symbol_match", symbol.symbol_id, "symbol");
 
     const routes = db.prepare("SELECT * FROM routes").all();
     for (const route of routes) {
       const score = textScore(`${route.method} ${route.route_path}`, terms, 10);
-      if (score > 0) addFile(files, route.file_path, score, `route:${route.method} ${route.route_path}`, route.symbol_id);
+      if (score > 0) addFile(files, route.file_path, score, `route:${route.method} ${route.route_path}`, route.symbol_id, "route");
     }
     const dbObjects = db.prepare("SELECT * FROM db_objects").all();
     for (const obj of dbObjects) {
       const score = textScore(`${obj.object_name} ${obj.operation}`, terms, 8);
-      if (score > 0) addFile(files, obj.file_path, score, `db:${obj.object_name}`, obj.symbol_id);
+      if (score > 0) addFile(files, obj.file_path, score, `db:${obj.object_name}`, obj.symbol_id, "db");
     }
 
     const seedSymbols = new Set([...files.values()].flatMap((x)=>[...x.symbols]));
     for (const symbolId of [...seedSymbols].slice(0, 30)) {
       const edges = db.prepare(`SELECT d.*,s.file_path AS target_file FROM dependencies d LEFT JOIN symbols s ON s.symbol_id=d.resolved_symbol_id WHERE d.from_symbol_id=? OR d.resolved_symbol_id=?`).all(symbolId,symbolId);
       for (const edge of edges) {
-        if (edge.from_symbol_id === symbolId && edge.target_file) addFile(files, edge.target_file, 5, `callee_of:${symbolId}`, edge.resolved_symbol_id);
-        else if (edge.resolved_symbol_id === symbolId) addFile(files, edge.from_file, 4, `caller_of:${symbolId}`, edge.from_symbol_id);
+        if (edge.from_symbol_id === symbolId && edge.target_file) addFile(files, edge.target_file, 5, `callee_of:${symbolId}`, edge.resolved_symbol_id, "graph");
+        else if (edge.resolved_symbol_id === symbolId) addFile(files, edge.from_file, 4, `caller_of:${symbolId}`, edge.from_symbol_id, "graph");
       }
     }
 
     const preliminary = [...files.values()].sort((a,b)=>b.score-a.score);
     for (const candidate of preliminary.slice(0, 10)) {
       const tests = db.prepare("SELECT * FROM tests WHERE target_file=? OR target_symbol_id IN (SELECT symbol_id FROM symbols WHERE file_path=?)").all(candidate.path,candidate.path);
-      for (const test of tests) addFile(files, test.test_file, 7, `test_for:${candidate.path}`, test.test_symbol_id);
+      for (const test of tests) addFile(files, test.test_file, 7, `test_for:${candidate.path}`, test.test_symbol_id, "test");
     }
 
-    const rankedFiles = [...files.values()].map((x)=>({ ...x, symbols:[...x.symbols] })).sort((a,b)=>b.score-a.score || a.path.localeCompare(b.path));
+    const rankedFiles = [...files.values()]
+      .map((x)=>({
+        ...x,
+        raw_score: x.score,
+        score: x.score * fileScoreMultiplier(x.path, terms),
+        symbols:[...x.symbols],
+        channel_scores: x.channel_scores
+      }))
+      .sort((a,b)=>b.score-a.score || a.path.localeCompare(b.path));
     const selected = rankedFiles.slice(0, Math.max(1,maxFiles));
     const selectedSet = new Set(selected.map((x)=>x.path));
     const relevantFeatures = topFeatures.map((feature)=>({ id:feature.feature_id,name:feature.name,description:feature.description,status:feature.status,needs_review:Boolean(feature.needs_review),score:Number(feature.score.toFixed(2)),invariants:feature.invariants }));
@@ -118,7 +145,13 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       selected_files: selected.length,
       exact_feature_hits: relevantFeatures.length,
       strong_symbol_hits: rankedSymbols.filter((s)=>s.score >= 20).length,
-      status: rankedFiles.length === 0 ? "insufficient" : (topFeatures.some((f)=>f.status !== "valid" || f.needs_review) ? "review_required" : "sufficient")
+      status: rankedFiles.length === 0
+        ? "insufficient"
+        : (topFeatures.some((f)=>f.status !== "valid" || f.needs_review)
+          ? "review_required"
+          : ((rankedFiles.length > Math.max(60, maxFiles * 5) || rankedSymbols.filter((s)=>s.score >= 20).length > 250)
+            ? "broad"
+            : "sufficient"))
     };
     return {
       ok:true,
@@ -131,7 +164,7 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       symbols: symbolDetails,
       tests,
       coverage,
-      semantic_refinement_recommended: rankedFiles.length > 60 || coverage.status === "insufficient"
+      semantic_refinement_recommended: ["insufficient", "broad"].includes(coverage.status)
     };
   } finally { db.close(); }
 }
