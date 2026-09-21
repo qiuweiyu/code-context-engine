@@ -12,7 +12,7 @@ import { analyzeScriptFile } from "./analyze-script.js";
 import { extractDbObjects, extractRoutes } from "./analyze-common.js";
 import { loadFeatureDefinitions, markFeaturesForFileChange, markFeaturesForSymbolChange, refreshFeatureStatus, syncFeatureDefinitions } from "./features.js";
 import { exportIndex } from "./export.js";
-import { rebuildDependencyEdges, rebuildRouteHandlerEdges } from "./edges.js";
+import { rebuildApiRequestEdges, rebuildDependencyEdges, rebuildRouteHandlerEdges } from "./edges.js";
 
 async function readLocalSource(repoRoot, relPath) {
   const full = path.resolve(repoRoot, relPath);
@@ -174,6 +174,7 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
       rebuildTestMappings(db);
       rebuildDependencyEdges(db);
       rebuildRouteHandlerEdges(db);
+      rebuildApiRequestEdges(db);
     });
 
     const definitions = await loadFeatureDefinitions(gitRoot);

@@ -1,4 +1,5 @@
 import { lineOf, nearestSymbol } from "./utils.js";
+import { extractClientRoutes } from "./client-requests.js";
 
 const SQL_PATTERNS = [
   ["table", "select", /\bSELECT\b[\s\S]{0,300}?\bFROM\s+["'`]?([A-Za-z_][\w.$-]*)/gi],
@@ -70,8 +71,8 @@ function addRoute(out, seen, text, filePath, symbols, route) {
 }
 
 export function extractRoutes(text, filePath, symbols = []) {
-  const out = [];
-  const seen = new Set();
+  const out = extractClientRoutes(text, filePath, symbols);
+  const seen = new Set(out.map((route) => `${route.direction}:${route.method}:${route.route_path}:${route.line}`));
 
   // Go/custom-router style:
   // router.Handle(http.MethodGet, "/path", wrapper(http.HandlerFunc(api.List)))
@@ -102,9 +103,6 @@ export function extractRoutes(text, filePath, symbols = []) {
   const patterns = [
     ["server", /\b(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s*\(\s*["'`]([^"'`]+)["'`]/g, null],
     ["server", /\.(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s*\(\s*["'`]([^"'`]+)["'`]/gi, 1],
-    ["client", /\b(?:fetch|request)\s*\(\s*["'`]([^"'`]+)["'`]/gi, null],
-    ["client", /\baxios\.(get|post|put|patch|delete)\s*\(\s*["'`]([^"'`]+)["'`]/gi, 1],
-    ["client", /\burl\s*:\s*["'`]([^"'`]+)["'`]/gi, null]
   ];
   for (const [direction, regex, methodGroup] of patterns) {
     for (const match of text.matchAll(regex)) {
