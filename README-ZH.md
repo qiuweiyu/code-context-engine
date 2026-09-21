@@ -8,6 +8,8 @@ Code Context Engine（CCE）是一个本地优先的静态代码分析工具。�
 
 CCE 面向开发者、IDE、CI 和 Coding Agent。核心索引流程不依赖任何 AI 模型或外部 API。
 
+**快速开始：** [中文操作流程](docs/QUICKSTART-ZH.md) · [English Quick Start](docs/QUICKSTART.md)
+
 ## 为什么做这个项目
 
 大型项目持续开发后，真正昂贵的往往不是修改代码本身，而是反复重新理解项目：
