@@ -104,17 +104,20 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
     const symbols = db.prepare("SELECT * FROM symbols").all();
     const rankedSymbols = [];
     for (const symbol of symbols) {
-      const score =
-        textScore(symbol.name, terms, 14) +
-        textScore(symbol.qualified_name, terms, 12) +
-        textScore(symbol.description, terms, 7) +
-        textScore(symbol.signature, terms, 5) +
-        textScore(symbol.file_path, terms, 6) +
+      const projectScore =
         textScore(symbol.name, projectTerms, 36) +
         textScore(symbol.qualified_name, projectTerms, 30) +
         textScore(symbol.file_path, projectTerms, 20) +
         textScore(symbol.description, projectTerms, 12);
-      if (score > 0) rankedSymbols.push({ ...symbol, score });
+      const genericScore =
+        textScore(symbol.name, terms, 14) +
+        textScore(symbol.qualified_name, terms, 12) +
+        textScore(symbol.description, terms, 7) +
+        textScore(symbol.signature, terms, 5) +
+        textScore(symbol.file_path, terms, 6);
+      const score = projectScore + genericScore;
+      const eligible = projectTerms.length > 0 ? projectScore > 0 : score > 0;
+      if (eligible) rankedSymbols.push({ ...symbol, score, project_score: projectScore });
     }
     rankedSymbols.sort((a,b)=>b.score-a.score);
     for (const symbol of rankedSymbols.slice(0, 20)) addFile(files, symbol.file_path, symbol.score, "symbol_match", symbol.symbol_id, "symbol");
@@ -122,19 +125,27 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
     const routes = db.prepare("SELECT * FROM routes").all();
     for (const route of routes) {
       const routeText = `${route.method} ${route.route_path}`;
-      const score = textScore(routeText, terms, 10) + textScore(routeText, projectTerms, 24);
-      if (score > 0) addFile(files, route.file_path, score, `route:${route.method} ${route.route_path}`, route.symbol_id, "route");
+      const projectScore = textScore(routeText, projectTerms, 24);
+      const score = textScore(routeText, terms, 10) + projectScore;
+      if (score > 0 && (projectTerms.length === 0 || projectScore > 0)) {
+        addFile(files, route.file_path, score, `route:${route.method} ${route.route_path}`, route.symbol_id, "route");
+      }
     }
     const dbObjects = db.prepare("SELECT * FROM db_objects").all();
     for (const obj of dbObjects) {
       const dbText = `${obj.object_name} ${obj.operation}`;
-      const score = textScore(dbText, terms, 8) + textScore(dbText, projectTerms, 18);
-      if (score > 0) addFile(files, obj.file_path, score, `db:${obj.object_name}`, obj.symbol_id, "db");
+      const projectScore = textScore(dbText, projectTerms, 18);
+      const score = textScore(dbText, terms, 8) + projectScore;
+      if (score > 0 && (projectTerms.length === 0 || projectScore > 0)) {
+        addFile(files, obj.file_path, score, `db:${obj.object_name}`, obj.symbol_id, "db");
+      }
     }
 
     const fileRows = db.prepare("SELECT path,is_test FROM files WHERE is_test=0").all();
     for (const fileRow of fileRows) {
-      const score = textScore(fileRow.path, projectTerms, 18) + textScore(fileRow.path, terms, 2);
+      const projectScore = textScore(fileRow.path, projectTerms, 18);
+      const genericScore = projectTerms.length === 0 ? textScore(fileRow.path, terms, 2) : 0;
+      const score = projectScore + genericScore;
       if (score > 0) addFile(files, fileRow.path, score, "path_match", null, "path");
     }
 
@@ -193,7 +204,8 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       terms,
       query_expansion: {
         applied_aliases: expansion.applied_aliases,
-        project_terms: projectTerms
+        project_terms: projectTerms,
+        retrieval_mode: projectTerms.length > 0 ? "project_anchor" : "lexical"
       },
       features: relevantFeatures,
       must_read: mustRead.map((x)=>({path:x.path,score:Number(x.score.toFixed(2)),reasons:x.reasons,symbols:x.symbols})),
