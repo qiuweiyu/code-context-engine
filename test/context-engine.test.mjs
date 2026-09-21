@@ -5,9 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { DatabaseSync } from "node:sqlite";
 import { indexRepository } from "../src/context/indexer.js";
 import { queryContext } from "../src/context/retriever.js";
 import { readIndexStatus } from "../src/context/status.js";
+import { openStore } from "../src/context/store.js";
+import { EDGE_CONFIDENCE, EDGE_TYPES } from "../src/context/edges.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -329,6 +332,67 @@ test("project anchor retrieval limits generic admin/list noise", async () => {
     assert.equal(query.must_read.some((x) => x.path === "admin/src/api/admin-student.ts"), false);
     assert.equal(query.must_read.some((x) => x.path === "backend/classroom/admin_list.go"), false);
     assert.ok(query.coverage.candidate_files <= 3);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+
+test("schema v4 backfills typed edges from existing dependencies without reindexing", async () => {
+  const root = await fixture();
+  const indexDir = path.join(root, ".context-index");
+  const dbPath = path.join(indexDir, "index.sqlite");
+  try {
+    const first = await indexRepository({ repoRoot: root });
+    assert.equal(first.manifest.schema_version, 4);
+    assert.ok(first.manifest.counts.edges > 0);
+
+    const edgeLines = (await fs.readFile(path.join(indexDir, "edges.jsonl"), "utf8"))
+      .trim().split(/\r?\n/).filter(Boolean).map(JSON.parse);
+    assert.ok(edgeLines.some((edge) => edge.type === "call"));
+    assert.ok(edgeLines.some((edge) => edge.type === "import"));
+    assert.ok(edgeLines.every((edge) => EDGE_CONFIDENCE.includes(edge.confidence)));
+    for (const type of ["call", "import", "route_handler", "api_request", "db_read", "db_write", "test_of", "page_api"]) {
+      assert.ok(EDGE_TYPES.includes(type));
+    }
+
+    const legacy = new DatabaseSync(dbPath);
+    const legacyDependencyCount = legacy.prepare(
+      "SELECT COUNT(*) AS n FROM dependencies WHERE relation IN ('calls','imports')"
+    ).get().n;
+    const indexedAt = legacy.prepare("SELECT value FROM meta WHERE key='last_indexed_at'").get().value;
+    legacy.prepare("DELETE FROM edges").run();
+    legacy.prepare("UPDATE meta SET value='3' WHERE key='schema_version'").run();
+    legacy.close();
+
+    const migrated = openStore(indexDir);
+    try {
+      assert.equal(
+        migrated.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get().value,
+        "4"
+      );
+      assert.equal(
+        migrated.db.prepare("SELECT COUNT(*) AS n FROM edges").get().n,
+        legacyDependencyCount
+      );
+      assert.equal(
+        migrated.db.prepare("SELECT value FROM meta WHERE key='last_indexed_at'").get().value,
+        indexedAt
+      );
+
+      const resolvedCall = migrated.db.prepare(
+        "SELECT evidence_json FROM edges WHERE type='call' AND confidence='static' LIMIT 1"
+      ).get();
+      assert.ok(resolvedCall);
+      assert.equal(JSON.parse(resolvedCall.evidence_json).type, "static_resolution");
+
+      const unresolved = migrated.db.prepare(
+        "SELECT edge_id FROM edges WHERE confidence='unresolved' LIMIT 1"
+      ).get();
+      assert.ok(unresolved);
+    } finally {
+      migrated.db.close();
+    }
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

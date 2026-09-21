@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const PARSER_VERSION = "0.1.1";
 
 export const SCHEMA_SQL = `
@@ -55,6 +55,21 @@ CREATE TABLE IF NOT EXISTS dependencies (
 CREATE INDEX IF NOT EXISTS idx_dep_from_symbol ON dependencies(from_symbol_id);
 CREATE INDEX IF NOT EXISTS idx_dep_resolved_symbol ON dependencies(resolved_symbol_id);
 CREATE INDEX IF NOT EXISTS idx_dep_from_file ON dependencies(from_file);
+
+CREATE TABLE IF NOT EXISTS edges (
+  edge_id TEXT PRIMARY KEY,
+  from_node_id TEXT NOT NULL,
+  to_node_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  confidence TEXT NOT NULL CHECK (confidence IN ('exact','static','inferred','unresolved')),
+  evidence_json TEXT NOT NULL,
+  source_kind TEXT NOT NULL,
+  source_id INTEGER
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_edges_from_node ON edges(from_node_id);
+CREATE INDEX IF NOT EXISTS idx_edges_to_node ON edges(to_node_id);
+CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(type);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_source ON edges(source_kind,source_id);
 
 CREATE TABLE IF NOT EXISTS routes (
   id INTEGER PRIMARY KEY,

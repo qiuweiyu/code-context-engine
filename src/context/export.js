@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { listTypedEdges } from "./edges.js";
 
 async function writeJsonlAtomic(filePath, records) {
   const tmp = `${filePath}.tmp`;
@@ -16,6 +17,7 @@ export async function exportIndex(db, indexDir) {
   const tables = db.prepare("SELECT * FROM db_objects ORDER BY object_name,file_path,line").all();
   const tests = db.prepare("SELECT * FROM tests ORDER BY test_file,target_file").all();
   const dependencies = db.prepare("SELECT * FROM dependencies ORDER BY from_file,from_symbol_id,to_ref").all();
+  const edges = listTypedEdges(db);
   const changes = db.prepare("SELECT * FROM change_events ORDER BY id").all();
   const featureRows = db.prepare("SELECT * FROM features ORDER BY feature_id").all();
   const features = featureRows.map((feature) => {
@@ -38,6 +40,7 @@ export async function exportIndex(db, indexDir) {
     writeJsonlAtomic(path.join(indexDir, "tables.jsonl"), tables),
     writeJsonlAtomic(path.join(indexDir, "tests.jsonl"), tests),
     writeJsonlAtomic(path.join(indexDir, "dependencies.jsonl"), dependencies),
+    writeJsonlAtomic(path.join(indexDir, "edges.jsonl"), edges),
     writeJsonlAtomic(path.join(indexDir, "changes.jsonl"), changes)
   ]);
   const manifest = {
@@ -50,7 +53,8 @@ export async function exportIndex(db, indexDir) {
       routes: routes.length,
       db_objects: tables.length,
       tests: tests.length,
-      dependencies: dependencies.length
+      dependencies: dependencies.length,
+      edges: edges.length
     },
     feature_status: {
       valid: features.filter((x)=>x.status === "valid").length,
