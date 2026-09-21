@@ -48,9 +48,6 @@ function addAliasValue(target, value) {
   target.add(raw);
   const compact = raw.replace(/[\s_.:/\\-]+/g, "");
   if (compact.length >= 2) target.add(compact);
-  for (const token of rawTerms(raw).map((x) => x.toLowerCase())) {
-    if (token.length >= 2) target.add(token);
-  }
 }
 
 function normalizedAliasValues(value) {
@@ -74,18 +71,27 @@ export function expandQuery(text, customAliases = {}) {
     }
   }
 
-  const applyTable = (table, sourceName) => {
-    for (const [key, value] of Object.entries(table ?? {})) {
-      const matchKey = String(key).trim().toLowerCase();
-      if (!matchKey || !sourceLower.includes(matchKey)) continue;
-      const aliases = normalizedAliasValues(value);
-      for (const alias of aliases) addAliasValue(terms, alias);
-      appliedAliases.push({ source: sourceName, key, aliases });
-    }
-  };
+  const merged = new Map();
+  for (const [key, value] of Object.entries(BUILTIN_QUERY_ALIASES)) {
+    merged.set(key, { source: "builtin", value });
+  }
+  for (const [key, value] of Object.entries(customAliases ?? {})) {
+    merged.set(key, { source: "project", value });
+  }
 
-  applyTable(BUILTIN_QUERY_ALIASES, "builtin");
-  applyTable(customAliases, "project");
+  const matches = [...merged.entries()]
+    .map(([key, meta]) => ({ key, matchKey: String(key).trim().toLowerCase(), ...meta }))
+    .filter((item) => item.matchKey && sourceLower.includes(item.matchKey))
+    .sort((a, b) => [...b.matchKey].length - [...a.matchKey].length || a.matchKey.localeCompare(b.matchKey));
+
+  const selected = [];
+  for (const item of matches) {
+    if (selected.some((parent) => parent.matchKey.includes(item.matchKey))) continue;
+    selected.push(item);
+    const aliases = normalizedAliasValues(item.value);
+    for (const alias of aliases) addAliasValue(terms, alias);
+    appliedAliases.push({ source: item.source, key: item.key, aliases });
+  }
 
   return { terms: [...terms], applied_aliases: appliedAliases };
 }
