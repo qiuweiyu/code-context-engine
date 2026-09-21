@@ -104,6 +104,26 @@ node .\src\cli.js query --repo "D:\Path\To\YourProject" --task "编辑未发布�
 
 建议先读取 `must_read`，上下文不足时再看 `maybe_read`。查询没有命中，不代表功能一定不存在。
 
+
+## 项目业务词别名
+
+如果需求描述中的业务词与源码英文命名没有直接词法关系，可以在项目根目录增加：
+
+```text
+.context-query-aliases.json
+```
+
+例如：
+
+```json
+{
+  "定向任务": ["manualtask", "manual_task"],
+  "宠物成长": ["petgrowth", "pet_growth"]
+}
+```
+
+别名在执行 `query` 时读取，因此修改这个文件后不需要重新建立索引。
+
 ## 日常增量索引
 
 代码修改后重新执行同一个命令：
