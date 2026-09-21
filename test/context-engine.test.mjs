@@ -235,3 +235,38 @@ test("specific project aliases outrank generic task noise and migrations", async
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+
+test("accepts UTF-8 BOM in query alias config", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "cce-alias-bom-"));
+  try {
+    await fs.mkdir(path.join(root, "admin/src/api"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, "admin/src/api/admin-direct-task.ts"),
+      "export function listDirectTaskAssignments() { return request('/admin/direct-tasks/assignments') }\n"
+    );
+
+    await git(root, "init", "-q");
+    await git(root, "config", "user.email", "test@example.com");
+    await git(root, "config", "user.name", "Test");
+    await git(root, "add", ".");
+    await git(root, "commit", "-qm", "init");
+
+    await indexRepository({ repoRoot: root });
+
+    const aliasBody = JSON.stringify({ "人工任务": ["directtask", "direct_task"] }, null, 2);
+    await fs.writeFile(path.join(root, ".context-query-aliases.json"), "\uFEFF" + aliasBody, "utf8");
+
+    const query = queryContext({
+      repoRoot: root,
+      task: "管理端人工任务",
+      maxFiles: 10
+    });
+
+    assert.equal(query.ok, true);
+    assert.ok(query.terms.includes("directtask"));
+    assert.ok(query.query_expansion.applied_aliases.some((x) => x.source === "project" && x.key === "人工任务"));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
