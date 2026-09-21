@@ -18,6 +18,21 @@ function loadProjectAliases(repoRoot) {
   }
 }
 
+function aliasTermsFromExpansion(expansion, source) {
+  const out = new Set();
+  for (const entry of expansion.applied_aliases ?? []) {
+    if (entry.source !== source) continue;
+    for (const alias of entry.aliases ?? []) {
+      const raw = String(alias).trim().toLowerCase();
+      if (!raw) continue;
+      out.add(raw);
+      const compact = raw.replace(/[\s_.:/\\-]+/g, "");
+      if (compact.length >= 2) out.add(compact);
+    }
+  }
+  return [...out];
+}
+
 function textScore(text, terms, weight = 1) {
   const value = String(text ?? "").toLowerCase();
   let score = 0;
@@ -63,6 +78,7 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
   try {
     const expansion = expandQuery(task, loadProjectAliases(repoRoot));
     const terms = expansion.terms;
+    const projectTerms = aliasTermsFromExpansion(expansion, "project");
     const files = new Map();
     const featureCandidates = [];
     const features = db.prepare("SELECT * FROM features").all();
@@ -88,7 +104,16 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
     const symbols = db.prepare("SELECT * FROM symbols").all();
     const rankedSymbols = [];
     for (const symbol of symbols) {
-      const score = textScore(symbol.name, terms, 14) + textScore(symbol.qualified_name, terms, 12) + textScore(symbol.description, terms, 7) + textScore(symbol.signature, terms, 5) + textScore(symbol.file_path, terms, 6);
+      const score =
+        textScore(symbol.name, terms, 14) +
+        textScore(symbol.qualified_name, terms, 12) +
+        textScore(symbol.description, terms, 7) +
+        textScore(symbol.signature, terms, 5) +
+        textScore(symbol.file_path, terms, 6) +
+        textScore(symbol.name, projectTerms, 36) +
+        textScore(symbol.qualified_name, projectTerms, 30) +
+        textScore(symbol.file_path, projectTerms, 20) +
+        textScore(symbol.description, projectTerms, 12);
       if (score > 0) rankedSymbols.push({ ...symbol, score });
     }
     rankedSymbols.sort((a,b)=>b.score-a.score);
@@ -96,13 +121,21 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
 
     const routes = db.prepare("SELECT * FROM routes").all();
     for (const route of routes) {
-      const score = textScore(`${route.method} ${route.route_path}`, terms, 10);
+      const routeText = `${route.method} ${route.route_path}`;
+      const score = textScore(routeText, terms, 10) + textScore(routeText, projectTerms, 24);
       if (score > 0) addFile(files, route.file_path, score, `route:${route.method} ${route.route_path}`, route.symbol_id, "route");
     }
     const dbObjects = db.prepare("SELECT * FROM db_objects").all();
     for (const obj of dbObjects) {
-      const score = textScore(`${obj.object_name} ${obj.operation}`, terms, 8);
+      const dbText = `${obj.object_name} ${obj.operation}`;
+      const score = textScore(dbText, terms, 8) + textScore(dbText, projectTerms, 18);
       if (score > 0) addFile(files, obj.file_path, score, `db:${obj.object_name}`, obj.symbol_id, "db");
+    }
+
+    const fileRows = db.prepare("SELECT path,is_test FROM files WHERE is_test=0").all();
+    for (const fileRow of fileRows) {
+      const score = textScore(fileRow.path, projectTerms, 18) + textScore(fileRow.path, terms, 2);
+      if (score > 0) addFile(files, fileRow.path, score, "path_match", null, "path");
     }
 
     const seedSymbols = new Set([...files.values()].flatMap((x)=>[...x.symbols]));
@@ -158,7 +191,10 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       ok:true,
       task,
       terms,
-      query_expansion: { applied_aliases: expansion.applied_aliases },
+      query_expansion: {
+        applied_aliases: expansion.applied_aliases,
+        project_terms: projectTerms
+      },
       features: relevantFeatures,
       must_read: mustRead.map((x)=>({path:x.path,score:Number(x.score.toFixed(2)),reasons:x.reasons,symbols:x.symbols})),
       maybe_read: maybeRead.map((x)=>({path:x.path,score:Number(x.score.toFixed(2)),reasons:x.reasons,symbols:x.symbols})),
