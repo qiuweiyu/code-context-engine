@@ -279,3 +279,57 @@ test("accepts UTF-8 BOM in query alias config", async () => {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+
+test("project anchor retrieval limits generic admin/list noise", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "cce-anchor-mode-"));
+  try {
+    await fs.mkdir(path.join(root, "admin/src/api"), { recursive: true });
+    await fs.mkdir(path.join(root, "backend/directtask"), { recursive: true });
+    await fs.mkdir(path.join(root, "backend/classroom"), { recursive: true });
+
+    await fs.writeFile(
+      path.join(root, "admin/src/api/admin-direct-task.ts"),
+      "export function listDirectTaskAssignments() { return request('/admin/direct-tasks/assignments') }\n"
+    );
+    await fs.writeFile(
+      path.join(root, "admin/src/api/admin-student.ts"),
+      "export function listAdminStudents() { return request('/admin/students') }\n"
+    );
+    await fs.writeFile(
+      path.join(root, "backend/directtask/service.go"),
+      "package directtask\nfunc ListAssignments() {}\n"
+    );
+    await fs.writeFile(
+      path.join(root, "backend/classroom/admin_list.go"),
+      "package classroom\nfunc ListAdminPage() {}\n"
+    );
+    await fs.writeFile(
+      path.join(root, ".context-query-aliases.json"),
+      JSON.stringify({ "人工任务": ["directtask", "direct_task", "direct-task"] }, null, 2)
+    );
+
+    await git(root, "init", "-q");
+    await git(root, "config", "user.email", "test@example.com");
+    await git(root, "config", "user.name", "Test");
+    await git(root, "add", ".");
+    await git(root, "commit", "-qm", "init");
+
+    await indexRepository({ repoRoot: root });
+
+    const query = queryContext({
+      repoRoot: root,
+      task: "管理端设置了两个人工任务，但是小程序端只显示一个人工任务",
+      maxFiles: 10
+    });
+
+    assert.equal(query.query_expansion.retrieval_mode, "project_anchor");
+    assert.ok(query.must_read.some((x) => x.path === "admin/src/api/admin-direct-task.ts"));
+    assert.ok(query.must_read.some((x) => x.path === "backend/directtask/service.go"));
+    assert.equal(query.must_read.some((x) => x.path === "admin/src/api/admin-student.ts"), false);
+    assert.equal(query.must_read.some((x) => x.path === "backend/classroom/admin_list.go"), false);
+    assert.ok(query.coverage.candidate_files <= 3);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
