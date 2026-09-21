@@ -95,6 +95,19 @@ node .\src\cli.js query --repo "D:\Path\To\YourProject" --task "edit an unpublis
 
 Read `must_read` first, then expand into `maybe_read` only when necessary. A missing result is not proof that a feature does not exist.
 
+
+## Project-specific query aliases
+
+If business terms in task descriptions do not match source identifiers, add `.context-query-aliases.json` to the target repository root:
+
+```json
+{
+  "定向任务": ["manualtask", "manual_task"]
+}
+```
+
+Aliases are loaded at query time, so changing this file does not require re-indexing.
+
 ## Incremental workflow
 
 After code changes, run the same index command again:
