@@ -37,7 +37,7 @@ CCE turns those facts into a local machine-readable index that can be refreshed 
 
 ## Current status
 
-`v0.1.1` is an early open-source baseline.
+`v0.1.2` is an early open-source baseline.
 
 Current deep analyzers:
 
@@ -155,6 +155,22 @@ Force a full rebuild:
 ```bash
 node src/cli.js index --repo /path/to/project --force
 ```
+
+
+## Cross-language query aliases
+
+CCE does not use an LLM to translate task descriptions. Query-time retrieval includes a small built-in developer vocabulary and supports project-specific aliases in `.context-query-aliases.json`.
+
+Example:
+
+```json
+{
+  "定向任务": ["manualtask", "manual_task"],
+  "宠物成长": ["petgrowth", "pet_growth"]
+}
+```
+
+Aliases affect querying only; changing them does not require re-indexing.
 
 ## MCP
 
