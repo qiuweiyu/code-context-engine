@@ -86,7 +86,8 @@ test("context index is incremental and feature freshness follows code changes", 
     const reviewQuery = queryContext({ repoRoot: root, task: "未发布人工任务增加编辑功能" });
     assert.equal(reviewQuery.coverage.status, "review_required");
 
-    go = (await fs.readFile(goPath, "utf8")).replaceAll("UpdateManualTask", "EditManualTask");
+    go = (await fs.readFile(goPath, "utf8"))
+      .replaceAll("UpdateManualTask", "EditManualTask");
     await fs.writeFile(goPath, go);
     const renamed = await indexRepository({ repoRoot: root });
     assert.equal(renamed.manifest.feature_status.stale, 1);

@@ -9,13 +9,13 @@ const STOP = new Set([
 export function tokenize(text) {
   const raw = String(text ?? "")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[_.:/\-]+/g, " ")
-    .match(/[p{L}p{N}]{2,}/gu) ?? [];
+    .replace(/[_.:/\\-]+/g, " ")
+    .match(/[\p{L}\p{N}]{2,}/gu) ?? [];
   const expanded = [];
   for (const token of raw.map((x) => x.toLowerCase())) {
     if (STOP.has(token) || token.length < 2) continue;
     expanded.push(token);
-    if (/p{Script=Han}/u.test(token)) {
+    if (/\p{Script=Han}/u.test(token)) {
       const chars = [...token];
       for (let i = 0; i < chars.length - 1; i++) expanded.push(chars[i] + chars[i + 1]);
     }

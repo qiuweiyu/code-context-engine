@@ -28,11 +28,11 @@ export function isBlockedFile(relPath) {
 export function redactSecrets(text) {
   let out = text;
   const patterns = [
-    /(authorizations*:s*bearers+)[^s"']+/gi,
-    /(sk-[A-Za-z0-9_-]{16,})/g,
-    /(ts_[A-Za-z0-9_-]{12,})/g,
-    /(gh[pousr]_[A-Za-z0-9_]{20,})/g,
-    /((?:api[_-]?key|token|secret|password|passwd|pwd)s*[:=]s*["']?)[^s"',;]+/gi
+    /(authorization\s*:\s*bearer\s+)[^\s"']+/gi,
+    /\b(sk-[A-Za-z0-9_-]{16,})\b/g,
+    /\b(ts_[A-Za-z0-9_-]{12,})\b/g,
+    /\b(gh[pousr]_[A-Za-z0-9_]{20,})\b/g,
+    /((?:api[_-]?key|token|secret|password|passwd|pwd)\s*[:=]\s*["']?)[^\s"',;]+/gi
   ];
   for (const pattern of patterns) out = out.replace(pattern, "$1[redacted]");
   return out;

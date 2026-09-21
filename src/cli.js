@@ -12,19 +12,9 @@ function arg(name, fallback = null) {
   return i >= 0 ? process.argv[i + 1] : fallback;
 }
 function has(name) { return process.argv.includes(name); }
-function print(value) { process.stdout.write(JSON.stringify(value, null, 2) + "
-"); }
+function print(value) { process.stdout.write(JSON.stringify(value, null, 2) + "\n"); }
 function usage() {
-  process.stderr.write(`Code Context Engine v0.1.0
-
-Commands:
-  index --repo <path> [--force]
-  query --repo <path> --task <text> [--max-files 12]
-  status --repo <path>
-  review-feature --repo <path> --feature <id> [--note <text>]
-
-Generated data lives in <repo>/.context-index. Feature definitions live in <repo>/.context-features/*.json.
-`);
+  process.stderr.write(`Code Context Engine v0.1.0\n\nCommands:\n  index --repo <path> [--force]\n  query --repo <path> --task <text> [--max-files 12]\n  status --repo <path>\n  review-feature --repo <path> --feature <id> [--note <text>]\n\nGenerated data lives in <repo>/.context-index. Feature definitions live in <repo>/.context-features/*.json.\n`);
 }
 
 const cmd = process.argv[2];
