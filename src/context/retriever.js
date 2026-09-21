@@ -1,6 +1,21 @@
+import fs from "node:fs";
 import path from "node:path";
 import { openStore } from "./store.js";
-import { tokenize } from "../prefilter.js";
+import { expandQuery } from "../prefilter.js";
+
+function loadProjectAliases(repoRoot) {
+  const file = path.join(repoRoot, ".context-query-aliases.json");
+  if (!fs.existsSync(file)) return {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("root must be an object");
+    }
+    return parsed;
+  } catch (error) {
+    throw new Error(`Invalid .context-query-aliases.json: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
 
 function textScore(text, terms, weight = 1) {
   const value = String(text ?? "").toLowerCase();
@@ -26,7 +41,8 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
   const dir = path.isAbsolute(indexDir) ? indexDir : path.join(repoRoot, indexDir);
   const { db } = openStore(dir);
   try {
-    const terms = tokenize(task);
+    const expansion = expandQuery(task, loadProjectAliases(repoRoot));
+    const terms = expansion.terms;
     const files = new Map();
     const featureCandidates = [];
     const features = db.prepare("SELECT * FROM features").all();
@@ -108,6 +124,7 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       ok:true,
       task,
       terms,
+      query_expansion: { applied_aliases: expansion.applied_aliases },
       features: relevantFeatures,
       must_read: mustRead.map((x)=>({path:x.path,score:Number(x.score.toFixed(2)),reasons:x.reasons,symbols:x.symbols})),
       maybe_read: maybeRead.map((x)=>({path:x.path,score:Number(x.score.toFixed(2)),reasons:x.reasons,symbols:x.symbols})),
