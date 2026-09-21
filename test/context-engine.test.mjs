@@ -195,6 +195,10 @@ test("specific project aliases outrank generic task noise and migrations", async
       "export function listDirectTaskAssignments() { return request('/admin/direct-tasks/assignments') }\n"
     );
     await fs.writeFile(
+      path.join(root, "admin/src/api/admin-student.ts"),
+      "export function listAdminStudents() { return request('/admin/students') }\n"
+    );
+    await fs.writeFile(
       path.join(root, "migrations/000001_direct_tasks.up.sql"),
       [
         "CREATE TABLE direct_task_drafts(id bigint);",
@@ -228,6 +232,11 @@ test("specific project aliases outrank generic task noise and migrations", async
     assert.equal(query.terms.includes("manual"), false);
     assert.equal(query.query_expansion.applied_aliases.some((x) => x.source === "project" && x.key === "人工任务"), true);
     assert.equal(query.must_read[0].path, "admin/src/api/admin-direct-task.ts");
+    const direct = query.must_read.find((x) => x.path === "admin/src/api/admin-direct-task.ts");
+    const student = query.must_read.find((x) => x.path === "admin/src/api/admin-student.ts");
+    assert.ok(direct);
+    if (student) assert.ok(direct.score > student.score);
+    assert.ok(query.query_expansion.project_terms.includes("directtask"));
 
     const migration = query.must_read.find((x) => x.path === "migrations/000001_direct_tasks.up.sql");
     if (migration) assert.ok(migration.score < query.must_read[0].score);
