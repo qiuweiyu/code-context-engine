@@ -52,7 +52,7 @@ Human / IDE / Coding Agent
 
 ## 当前状态
 
-`v0.1.1` 是早期开源基线。
+`v0.1.2` 是早期开源基线。
 
 当前已包含：
 
@@ -205,6 +205,25 @@ node src/cli.js status --repo /path/to/project
 ```bash
 node src/cli.js index --repo /path/to/project --force
 ```
+
+
+## 中文任务与英文代码的别名映射
+
+CCE 不使用大模型翻译开发任务。为了让中文需求能够检索英文方法名、文件名和 Route，查询层提供两种确定性机制：
+
+1. 内置常见开发术语映射，例如 `管理端 → admin`、`小程序 → miniprogram`、`人工任务 → manualtask`；
+2. 项目可以在根目录增加 `.context-query-aliases.json`，维护少量业务词别名。
+
+例如：
+
+```json
+{
+  "定向任务": ["manualtask", "manual_task"],
+  "宠物成长": ["petgrowth", "pet_growth"]
+}
+```
+
+别名只在执行 `query` 时读取，因此修改别名后不需要重新建立索引。
 
 ## MCP
 
