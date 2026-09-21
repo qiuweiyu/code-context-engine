@@ -50,7 +50,7 @@ Human / IDE / Coding Agent
 
 ## 当前状态
 
-`v0.1.0` 是早期开源基线。
+`v0.1.1` 是早期开源基线。
 
 当前已包含：
 
@@ -89,7 +89,7 @@ Human / IDE / Coding Agent
 
 ```json
 {
-  "symbol_id": "go:internal/task::*Service.UpdateManualTask",
+  "symbol_id": "go:internal/task/service.go::*Service.UpdateManualTask",
   "file_path": "internal/task/service.go",
   "name": "UpdateManualTask",
   "qualified_name": "*Service.UpdateManualTask",
@@ -236,7 +236,7 @@ CCE 不会把整个仓库一次性返回给调用方，而是生成紧凑的 Con
     {
       "path": "internal/task/service.go",
       "symbols": [
-        "go:internal/task::*Service.UpdateManualTask"
+        "go:internal/task/service.go::*Service.UpdateManualTask"
       ]
     }
   ],

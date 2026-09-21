@@ -7,7 +7,7 @@ import { indexRepository } from "./context/indexer.js";
 import { queryContext } from "./context/retriever.js";
 import { readIndexStatus } from "./context/status.js";
 
-const server = new McpServer({ name: "code-context-engine", version: "0.1.0" });
+const server = new McpServer({ name: "code-context-engine", version: "0.1.1" });
 const textResult = (value) => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
 
 server.registerTool(

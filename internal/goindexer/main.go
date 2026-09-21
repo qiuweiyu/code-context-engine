@@ -62,14 +62,14 @@ func main() {
   for _,rel:=range req.Files {
     full:=filepath.Join(req.Root, filepath.FromSlash(rel)); src,err:=os.ReadFile(full); if err!=nil { enc.Encode(Result{FilePath:rel,Error:err.Error()}); continue }
     fset:=token.NewFileSet(); file,err:=parser.ParseFile(fset,full,src,parser.ParseComments); if err!=nil { enc.Encode(Result{FilePath:rel,Error:err.Error()}); continue }
-    dir:=filepath.ToSlash(filepath.Dir(rel)); if dir=="." { dir="root" }; pkg:=file.Name.Name; deps:=[]Dep{}
+    relID:=filepath.ToSlash(rel); pkg:=file.Name.Name; deps:=[]Dep{}
     for _,imp:=range file.Imports { deps=append(deps,Dep{FromFile:rel,Relation:"imports",ToRef:strings.Trim(imp.Path.Value,"\"")}) }
     syms:=[]Sym{}
     for _,decl:=range file.Decls {
       fn,ok:=decl.(*ast.FuncDecl); if !ok { continue }
       receiver:=recvName(fset,fn.Recv); q:=fn.Name.Name; kind:="function"; var recvPtr *string
       if receiver!="" { q=receiver+"."+fn.Name.Name; kind="method"; r:=receiver; recvPtr=&r }
-      id:=fmt.Sprintf("go:%s::%s",dir,q)
+      id:=fmt.Sprintf("go:%s::%s",relID,q)
       start:=fset.Position(fn.Pos()); end:=fset.Position(fn.End()); sOff:=start.Offset; eOff:=end.Offset; if sOff<0{sOff=0}; if eOff>len(src){eOff=len(src)}; if eOff<sOff{eOff=sOff}
       ps:=params(fset,fn.Type.Params); rs:=params(fset,fn.Type.Results); sig:=strings.TrimSpace(nodeString(fset,fn.Type)); doc:=""; source:="derived"; if fn.Doc!=nil { doc=strings.TrimSpace(fn.Doc.Text()); source="comment" }
       cs:=calls(fn); desc:=doc; if desc=="" { names:=[]string{}; for _,p:=range ps { if p.Name!="" {names=append(names,p.Name)} }; desc=fmt.Sprintf("%s(%s) in %s",q,strings.Join(names,", "),rel); if len(cs)>0 { max:=len(cs); if max>8{max=8}; desc += "; calls "+strings.Join(cs[:max],", ") }; desc += "." }

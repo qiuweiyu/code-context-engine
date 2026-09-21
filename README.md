@@ -35,7 +35,7 @@ CCE turns those facts into a local machine-readable index that can be refreshed 
 
 ## Current status
 
-`v0.1.0` is an early open-source baseline.
+`v0.1.1` is an early open-source baseline.
 
 Current deep analyzers:
 
@@ -69,7 +69,7 @@ Example symbol record:
 
 ```json
 {
-  "symbol_id": "go:internal/task::*Service.UpdateManualTask",
+  "symbol_id": "go:internal/task/service.go::*Service.UpdateManualTask",
   "file_path": "internal/task/service.go",
   "name": "UpdateManualTask",
   "qualified_name": "*Service.UpdateManualTask",
@@ -183,7 +183,7 @@ A task query returns a compact manifest instead of dumping the whole repository:
   "must_read": [
     {
       "path": "internal/task/service.go",
-      "symbols": ["go:internal/task::*Service.UpdateManualTask"]
+      "symbols": ["go:internal/task/service.go::*Service.UpdateManualTask"]
     }
   ],
   "maybe_read": [],

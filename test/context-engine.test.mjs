@@ -29,7 +29,7 @@ async function fixture() {
     description: "管理员编辑尚未发布的人工任务。",
     steps: [
       { order: 1, action: "管理端提交编辑请求", symbol_id: "typescript:admin/src/manualTask.ts::updateManualTask" },
-      { order: 2, action: "后端更新人工任务", symbol_id: "go:backend/task::*Service.UpdateManualTask" }
+      { order: 2, action: "后端更新人工任务", symbol_id: "go:backend/task/service.go::*Service.UpdateManualTask" }
     ],
     invariants: ["已发布任务禁止编辑"]
   };
@@ -94,6 +94,40 @@ test("context index is incremental and feature freshness follows code changes", 
     const status = readIndexStatus({ repoRoot: root });
     assert.equal(status.features[0].status, "stale");
     assert.equal(status.features[0].stale_reason, "unresolved_feature_symbol");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+
+test("Go symbol IDs remain unique for same logical method in different source files", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "cce-go-variants-"));
+  try {
+    await fs.mkdir(path.join(root, "platform"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, "platform/runner_windows.go"),
+      "//go:build windows\n\npackage platform\n\ntype Runner struct{}\nfunc (r *Runner) Start() error { return nil }\n"
+    );
+    await fs.writeFile(
+      path.join(root, "platform/runner_linux.go"),
+      "//go:build linux\n\npackage platform\n\ntype Runner struct{}\nfunc (r *Runner) Start() error { return nil }\n"
+    );
+    await git(root, "init", "-q");
+    await git(root, "config", "user.email", "test@example.com");
+    await git(root, "config", "user.name", "Test");
+    await git(root, "add", ".");
+    await git(root, "commit", "-qm", "init");
+
+    const result = await indexRepository({ repoRoot: root });
+    assert.equal(result.changed_files, 2);
+    assert.equal(result.manifest.counts.symbols, 2);
+
+    const lines = (await fs.readFile(path.join(root, ".context-index/symbols.jsonl"), "utf8"))
+      .trim().split(/\r?\n/).filter(Boolean).map(JSON.parse);
+    const ids = lines.map((x) => x.symbol_id);
+    assert.equal(new Set(ids).size, 2);
+    assert.ok(ids.includes("go:platform/runner_windows.go::*Runner.Start"));
+    assert.ok(ids.includes("go:platform/runner_linux.go::*Runner.Start"));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

@@ -82,11 +82,11 @@ A symbol ID must be deterministic within a repository and stable when the symbol
 Current examples:
 
 ```text
-go:internal/task::*Service.UpdateManualTask
+go:internal/task/service.go::*Service.UpdateManualTask
 typescript:admin/src/task.ts::updateManualTask
 ```
 
-The symbol identity strategy will evolve carefully because feature freshness depends on it.
+Go symbol IDs include the source file path so platform/build-tag variants with the same receiver and method name remain distinct. The symbol identity strategy will evolve carefully because feature freshness depends on it.
 
 ## Confidence and evidence
 
