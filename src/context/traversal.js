@@ -205,7 +205,7 @@ export function traverseGraph(db, {
   }
 
   const starts = normalizeStartNodes(startNodeIds);
-  const hopLimit = asPositiveInteger(maxHops, "maxHops", 3, 4);
+  const hopLimit = asPositiveInteger(maxHops, "maxHops", 3, 6);
   const widthLimit = asPositiveInteger(branchLimit, "branchLimit", 8, 100);
   const totalNodeLimit = asPositiveInteger(nodeLimit, "nodeLimit", 128, 1000);
   if (starts.length > totalNodeLimit) {
