@@ -274,6 +274,73 @@ function applyIntentPathBoost(files, builtinTerms) {
   return boosted;
 }
 
+function aliasEntryTerms(entry) {
+  const out = new Set();
+  for (const alias of entry?.aliases ?? []) {
+    const raw = String(alias).trim().toLowerCase();
+    if (!raw) continue;
+    out.add(raw);
+    const compact = raw.replace(/[\s_.:/\\-]+/g, "");
+    if (compact.length >= 2) out.add(compact);
+  }
+  return [...out];
+}
+
+function selectWithIntentReservations(rankedFiles, maxFiles, expansion) {
+  const limit = Math.max(1, Number(maxFiles) || 1);
+  const builtinGroups = (expansion.applied_aliases ?? [])
+    .filter((entry) => entry.source === "builtin")
+    .map((entry) => ({ key: entry.key, terms: aliasEntryTerms(entry) }))
+    .filter((entry) => entry.terms.length > 0);
+
+  const reservationBudget = Math.min(
+    6,
+    Math.max(0, Math.floor(limit / 2))
+  );
+  const reservedPaths = [];
+  const reservedSet = new Set();
+
+  for (const group of builtinGroups) {
+    if (reservedPaths.length >= reservationBudget) break;
+    const matches = rankedFiles.filter((entry) =>
+      entry.reasons.includes("intent_path_match")
+      && textScore(entry.path, group.terms, 1) > 0
+    );
+    for (const entry of matches.slice(0, 2)) {
+      if (reservedSet.has(entry.path)) continue;
+      reservedSet.add(entry.path);
+      reservedPaths.push(entry.path);
+      if (reservedPaths.length >= reservationBudget) break;
+    }
+  }
+
+  const selected = rankedFiles.slice(0, limit);
+  const selectedSet = new Set(selected.map((entry) => entry.path));
+  for (const path of reservedPaths) {
+    if (selectedSet.has(path)) continue;
+    const replacementIndex = [...selected.keys()]
+      .reverse()
+      .find((index) => !reservedSet.has(selected[index].path));
+    if (replacementIndex === undefined) break;
+    selectedSet.delete(selected[replacementIndex].path);
+    const replacement = rankedFiles.find((entry) => entry.path === path);
+    if (!replacement) continue;
+    selected[replacementIndex] = replacement;
+    selectedSet.add(path);
+  }
+
+  const rank = new Map(rankedFiles.map((entry, index) => [entry.path, index]));
+  selected.sort((a, b) =>
+    (rank.get(a.path) ?? Number.MAX_SAFE_INTEGER)
+    - (rank.get(b.path) ?? Number.MAX_SAFE_INTEGER)
+  );
+
+  return {
+    selected,
+    reserved_files: reservedPaths.filter((path) => selectedSet.has(path))
+  };
+}
+
 export function queryContext({ repoRoot, task, indexDir = ".context-index", maxFiles = 12 }) {
   const dir = path.isAbsolute(indexDir) ? indexDir : path.join(repoRoot, indexDir);
   const { db } = openStore(dir);
@@ -407,7 +474,8 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
         channel_scores: x.channel_scores
       }))
       .sort((a,b)=>b.score-a.score || a.path.localeCompare(b.path));
-    const selected = rankedFiles.slice(0, Math.max(1,maxFiles));
+    const selection = selectWithIntentReservations(rankedFiles, maxFiles, expansion);
+    const selected = selection.selected;
     const selectedSet = new Set(selected.map((x)=>x.path));
     const relevantFeatures = topFeatures.map((feature)=>({ id:feature.feature_id,name:feature.name,description:feature.description,status:feature.status,needs_review:Boolean(feature.needs_review),score:Number(feature.score.toFixed(2)),invariants:feature.invariants }));
     const implementation = selected.filter((x)=>!db.prepare("SELECT is_test FROM files WHERE path=?").get(x.path)?.is_test);
@@ -449,6 +517,9 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
         import_reverse_steps: importExpansion.steps,
         import_seed_files: importExpansion.seed_files,
         intent_boosted_files: intentBoostedFiles
+      },
+      selection: {
+        intent_reserved_files: selection.reserved_files
       },
       features: relevantFeatures,
       must_read: mustRead.map((x)=>({path:x.path,score:Number(x.score.toFixed(2)),reasons:x.reasons,symbols:x.symbols})),
