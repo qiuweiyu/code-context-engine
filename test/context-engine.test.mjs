@@ -577,9 +577,13 @@ test("frontend requests resolve to backend routes through method and normalized 
         "type API struct{}",
         "func (api *API) Get(w http.ResponseWriter, r *http.Request) {}",
         "func (api *API) Create(w http.ResponseWriter, r *http.Request) {}",
+        "func (api *API) List(w http.ResponseWriter, r *http.Request) {}",
+        "func (api *API) Assignments(w http.ResponseWriter, r *http.Request) {}",
         "func register(router *Router, api *API) {",
         "  router.HandlePattern(http.MethodGet, \"/api/items/{item_id}\", http.HandlerFunc(api.Get))",
         "  router.Handle(http.MethodPost, \"/api/items\", http.HandlerFunc(api.Create))",
+        "  router.Handle(http.MethodGet, \"/api/items\", http.HandlerFunc(api.List))",
+        "  router.HandlePattern(http.MethodGet, \"/api/assignments/{student_id}\", http.HandlerFunc(api.Assignments))",
         "}"
       ].join("\n") + "\n"
     );
