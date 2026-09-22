@@ -499,7 +499,9 @@ export function rebuildApiRequestEdges(db) {
 
     if (method === "ANY") {
       candidates = serverRoutes.filter((route) => routePathShape(route.route_path) === clientShape);
-      resolution = "method_unresolved";
+      resolution = candidates.length === 1
+        ? "unique_path_shape_method_unknown"
+        : (candidates.length > 1 ? "method_unresolved_route_not_unique" : "route_not_found");
     } else {
       candidates = serverRoutes.filter(
         (route) =>
@@ -511,7 +513,7 @@ export function rebuildApiRequestEdges(db) {
         : (candidates.length > 1 ? "route_not_unique" : "route_not_found");
     }
 
-    const resolved = method !== "ANY" && candidates.length === 1 ? candidates[0] : null;
+    const resolved = candidates.length === 1 ? candidates[0] : null;
     const fromNode = client.symbol_id
       ? `symbol:${client.symbol_id}`
       : `file:${client.file_path}`;
