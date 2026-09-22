@@ -261,7 +261,7 @@ test("visited node set prevents traversal cycles", () => {
 
     const result = traverseGraph(db, {
       startNodeIds: a,
-      maxHops: 4
+      maxHops: 6
     });
 
     assert.equal(result.steps.length, 1);
@@ -278,9 +278,9 @@ test("traversal enforces hard hop bound", () => {
     assert.throws(
       () => traverseGraph(db, {
         startNodeIds: "symbol:go:backend/service.go::*Service.Get",
-        maxHops: 5
+        maxHops: 7
       }),
-      /maxHops must be an integer between 1 and 4/
+      /maxHops must be an integer between 1 and 6/
     );
   } finally {
     db.close();
