@@ -168,9 +168,10 @@ function channelEntries(files, channel) {
     );
 }
 
-function symbolSeedsFromEntries(entries, limit) {
+function symbolSeedsFromEntries(entries, limit, allowedFiles = null) {
   const out = [];
   for (const entry of entries) {
+    if (allowedFiles && !allowedFiles.has(entry.path)) continue;
     for (const symbolId of [...entry.symbols].sort()) {
       out.push(`symbol:${symbolId}`);
       if (out.length >= limit) return out;
@@ -179,16 +180,43 @@ function symbolSeedsFromEntries(entries, limit) {
   return out;
 }
 
-function buildGraphSeeds(files, matchedRouteNodes, matchedDbNodes, nonTestFiles) {
+function rankMatchedDbNodes(db, matchedDbNodes) {
+  const best = new Map();
+  for (const item of matchedDbNodes) {
+    const current = best.get(item.node_id);
+    if (!current || item.score > current.score) best.set(item.node_id, item);
+  }
+
+  const degree = db.prepare(
+    `SELECT COUNT(DISTINCT from_node_id) AS n
+     FROM edges
+     WHERE to_node_id=?
+       AND type IN ('db_read','db_write')
+       AND confidence IN ('static','exact')`
+  );
+
+  return [...best.values()]
+    .map((item) => ({
+      ...item,
+      bridge_degree: Number(degree.get(item.node_id)?.n ?? 0)
+    }))
+    .sort((a, b) =>
+      b.bridge_degree - a.bridge_degree
+      || b.score - a.score
+      || a.node_id.localeCompare(b.node_id)
+    );
+}
+
+function buildGraphSeeds(files, matchedRouteNodes, rankedDbNodes, nonTestFiles) {
   const overall = [...files.values()]
     .filter((entry) => nonTestFiles.has(entry.path))
     .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
 
   const nodes = [
-    ...symbolSeedsFromEntries(channelEntries(files, "symbol"), 3),
+    ...symbolSeedsFromEntries(channelEntries(files, "symbol"), 2, nonTestFiles),
     ...matchedRouteNodes.slice(0, 2),
-    ...[...new Set(matchedDbNodes)].slice(0, 3),
-    ...symbolSeedsFromEntries(channelEntries(files, "db"), 2),
+    ...rankedDbNodes.slice(0, 5).map((item) => item.node_id),
+    ...symbolSeedsFromEntries(channelEntries(files, "db"), 1, nonTestFiles),
     ...overall.slice(0, 2).map((entry) => `file:${entry.path}`)
   ];
   return [...new Set(nodes)].slice(0, 12);
@@ -316,7 +344,10 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       const score = textScore(dbText, terms, 8) + projectScore;
       if (score > 0 && (projectTerms.length === 0 || projectScore > 0)) {
         addFile(files, obj.file_path, score, `db:${obj.object_name}`, obj.symbol_id, "db");
-        matchedDbNodes.push(`db:${obj.object_type}:${obj.object_name}`);
+        matchedDbNodes.push({
+          node_id: `db:${obj.object_type}:${obj.object_name}`,
+          score
+        });
       }
     }
 
@@ -332,7 +363,8 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
     const nonTestFiles = new Set(
       db.prepare("SELECT path FROM files WHERE is_test=0").all().map((row) => row.path)
     );
-    const graphSeeds = buildGraphSeeds(files, matchedRouteNodes, matchedDbNodes, nonTestFiles);
+    const rankedDbNodes = rankMatchedDbNodes(db, matchedDbNodes);
+    const graphSeeds = buildGraphSeeds(files, matchedRouteNodes, rankedDbNodes, nonTestFiles);
     const graphExpansion = expandFromGraph(db, files, graphSeeds);
 
     const importCandidates = graphExpansion.added_file_paths
