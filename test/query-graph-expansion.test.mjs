@@ -19,15 +19,14 @@ test("query retrieval expands lexical business anchors through typed graph", asy
   try {
     await fs.mkdir(path.join(root, "web/src/views"), { recursive: true });
     await fs.mkdir(path.join(root, "web/src/api"), { recursive: true });
-    await fs.mkdir(path.join(root, "backend"), { recursive: true });
 
     await fs.writeFile(
       path.join(root, "web/src/views/AssignmentsView.vue"),
       [
         "<script setup lang=\"ts\">",
-        "import { listManualTasks } from '@/api/manual-task'",
+        "import { listManualTasks as load } from '@/api/manual-task'",
         "async function loadAssignments() {",
-        "  await listManualTasks()",
+        "  await load()",
         "}",
         "</script>",
         "<template><main>assignments</main></template>",
@@ -40,21 +39,6 @@ test("query retrieval expands lexical business anchors through typed graph", asy
       [
         "export async function listManualTasks() {",
         "  return request('/api/manual-tasks', { method: 'GET' })",
-        "}",
-        ""
-      ].join("\n")
-    );
-
-    await fs.writeFile(
-      path.join(root, "backend/api.go"),
-      [
-        "package backend",
-        "import \"net/http\"",
-        "type Router struct{}",
-        "type API struct{}",
-        "func (api *API) List(w http.ResponseWriter, r *http.Request) {}",
-        "func register(router *Router, api *API) {",
-        "  router.Handle(http.MethodGet, \"/api/manual-tasks\", http.HandlerFunc(api.List))",
         "}",
         ""
       ].join("\n")
