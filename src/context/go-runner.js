@@ -7,7 +7,7 @@ import { sha256Text } from "./hash.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const helperSource = path.resolve(here, "../../internal/goindexer/main.go");
-let cachedBinary = null;
+let cachedBinaryPromise = null;
 
 function runProcess(command, args, { input = "", timeout = 120000 } = {}) {
   return new Promise((resolve, reject) => {
@@ -27,18 +27,53 @@ function runProcess(command, args, { input = "", timeout = 120000 } = {}) {
   });
 }
 
-async function helperBinary() {
-  if (cachedBinary) return cachedBinary;
+async function buildHelperBinary() {
   const src = await fs.readFile(helperSource, "utf8");
   const digest = sha256Text(src).slice(0, 16);
   const ext = process.platform === "win32" ? ".exe" : "";
   const dir = path.join(os.tmpdir(), "code-context-engine");
   await fs.mkdir(dir, { recursive: true });
   const binary = path.join(dir, `goindexer-${digest}${ext}`);
-  try { await fs.access(binary); cachedBinary = binary; return binary; } catch {}
-  await runProcess("go", ["build", "-o", binary, helperSource], { timeout: 120000 });
-  cachedBinary = binary;
-  return binary;
+
+  try {
+    await fs.access(binary);
+    return binary;
+  } catch {}
+
+  const buildOutput = path.join(
+    dir,
+    `goindexer-${digest}-${process.pid}.build${ext}`
+  );
+  await fs.rm(buildOutput, { force: true });
+
+  try {
+    await runProcess("go", ["build", "-o", buildOutput, helperSource], { timeout: 120000 });
+
+    try {
+      await fs.rename(buildOutput, binary);
+    } catch (error) {
+      try {
+        await fs.access(binary);
+        await fs.rm(buildOutput, { force: true });
+      } catch {
+        throw error;
+      }
+    }
+
+    return binary;
+  } finally {
+    await fs.rm(buildOutput, { force: true }).catch(() => {});
+  }
+}
+
+async function helperBinary() {
+  if (!cachedBinaryPromise) {
+    cachedBinaryPromise = buildHelperBinary().catch((error) => {
+      cachedBinaryPromise = null;
+      throw error;
+    });
+  }
+  return cachedBinaryPromise;
 }
 
 export async function analyzeGoFiles(repoRoot, files) {
