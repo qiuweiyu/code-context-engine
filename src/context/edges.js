@@ -164,6 +164,65 @@ export function rebuildDbObjectEdges(db) {
   }
 }
 
+export function testMappingToTypedEdge(mapping) {
+  if (!mapping?.test_file) return null;
+
+  const targetNodeId = mapping.target_symbol_id
+    ? nodeId("symbol", mapping.target_symbol_id)
+    : (mapping.target_file ? nodeId("file", mapping.target_file) : null);
+  if (!targetNodeId) return null;
+
+  const fromNodeId = mapping.test_symbol_id
+    ? nodeId("symbol", mapping.test_symbol_id)
+    : nodeId("file", mapping.test_file);
+
+  const isStaticCall = mapping.reason === "test_calls_symbol" && Boolean(mapping.target_symbol_id);
+  const confidence = isStaticCall ? "static" : "inferred";
+
+  return {
+    edge_id: `test_mapping:${mapping.id}`,
+    from_node_id: fromNodeId,
+    to_node_id: targetNodeId,
+    type: "test_of",
+    confidence,
+    evidence: {
+      type: isStaticCall ? "static_resolution" : "inferred_relation",
+      source: "tests",
+      source_id: mapping.id,
+      test_file: mapping.test_file,
+      test_symbol_id: mapping.test_symbol_id ?? null,
+      target_file: mapping.target_file ?? null,
+      target_symbol_id: mapping.target_symbol_id ?? null,
+      mapping_confidence: mapping.confidence,
+      resolution: mapping.reason
+    },
+    source_kind: "test_mapping",
+    source_id: mapping.id
+  };
+}
+
+export function rebuildTestEdges(db) {
+  db.prepare("DELETE FROM edges WHERE source_kind='test_mapping'").run();
+  const mappings = db.prepare("SELECT * FROM tests ORDER BY id").all();
+  const insert = db.prepare(`INSERT INTO edges(edge_id,from_node_id,to_node_id,type,confidence,evidence_json,source_kind,source_id)
+    VALUES(?,?,?,?,?,?,?,?)`);
+
+  for (const mapping of mappings) {
+    const edge = testMappingToTypedEdge(mapping);
+    if (!edge) continue;
+    insert.run(
+      edge.edge_id,
+      edge.from_node_id,
+      edge.to_node_id,
+      edge.type,
+      edge.confidence,
+      JSON.stringify(edge.evidence),
+      edge.source_kind,
+      edge.source_id
+    );
+  }
+}
+
 export function listTypedEdges(db) {
   return db.prepare("SELECT * FROM edges ORDER BY edge_id").all().map((row) => ({
     ...row,
