@@ -21,8 +21,23 @@ export function nearestSymbol(symbols, line) {
 }
 
 export function resolveRelativeImport(fromFile, specifier, trackedSet) {
-  if (!specifier?.startsWith(".")) return null;
-  const base = normalizeRel(path.posix.normalize(path.posix.join(path.posix.dirname(normalizeRel(fromFile)), specifier)));
+  const from = normalizeRel(fromFile);
+  const raw = String(specifier ?? "");
+  let base = null;
+
+  if (raw.startsWith(".")) {
+    base = normalizeRel(path.posix.normalize(path.posix.join(path.posix.dirname(from), raw)));
+  } else if (raw.startsWith("@/")) {
+    const srcMarker = "/src/";
+    const markerIndex = from.lastIndexOf(srcMarker);
+    if (markerIndex >= 0) {
+      base = from.slice(0, markerIndex + srcMarker.length) + raw.slice(2);
+    } else if (from.startsWith("src/")) {
+      base = "src/" + raw.slice(2);
+    }
+  }
+
+  if (!base) return null;
   const attempts = [
     base,
     `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.jsx`, `${base}.vue`,
