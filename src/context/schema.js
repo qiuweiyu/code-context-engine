@@ -1,5 +1,5 @@
-export const SCHEMA_VERSION = 6;
-export const PARSER_VERSION = "0.2.2";
+export const SCHEMA_VERSION = 7;
+export const PARSER_VERSION = "0.2.3";
 
 export const SCHEMA_SQL = `
 PRAGMA foreign_keys = ON;
@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS dependencies (
   relation TEXT NOT NULL,
   to_ref TEXT NOT NULL,
   to_file TEXT,
-  resolved_symbol_id TEXT
+  resolved_symbol_id TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
 ) STRICT;
 CREATE INDEX IF NOT EXISTS idx_dep_from_symbol ON dependencies(from_symbol_id);
 CREATE INDEX IF NOT EXISTS idx_dep_resolved_symbol ON dependencies(resolved_symbol_id);
