@@ -37,8 +37,18 @@ function insertAnalysis(db, relPath, language, hash, text, analysis, now) {
     symbolStmt.run(symbol.symbol_id, relPath, language, symbol.name, symbol.qualified_name, symbol.kind, symbol.receiver ?? null, symbol.signature ?? "", JSON.stringify(symbol.params ?? []), JSON.stringify(symbol.returns ?? []), symbol.description ?? "", symbol.description_source ?? "derived", symbol.line_start ?? 1, symbol.line_end ?? 1, symbol.implementation_hash, symbol.semantic_hash);
   }
 
-  const depStmt = db.prepare(`INSERT INTO dependencies(from_file,from_symbol_id,relation,to_ref,to_file,resolved_symbol_id) VALUES(?,?,?,?,?,?)`);
-  for (const dep of analysis.dependencies ?? []) depStmt.run(relPath, dep.from_symbol_id ?? null, dep.relation, dep.to_ref, dep.to_file ?? null, null);
+  const depStmt = db.prepare(`INSERT INTO dependencies(from_file,from_symbol_id,relation,to_ref,to_file,resolved_symbol_id,metadata_json) VALUES(?,?,?,?,?,?,?)`);
+  for (const dep of analysis.dependencies ?? []) {
+    depStmt.run(
+      relPath,
+      dep.from_symbol_id ?? null,
+      dep.relation,
+      dep.to_ref,
+      dep.to_file ?? null,
+      null,
+      JSON.stringify(dep.metadata ?? {})
+    );
+  }
 
   const symbols = analysis.symbols ?? [];
   const routeStmt = db.prepare(`INSERT INTO routes(file_path,symbol_id,method,route_path,direction,line,handler_ref,handler_owner_type,handler_symbol_id) VALUES(?,?,?,?,?,?,?,?,?)`);
@@ -60,25 +70,200 @@ function insertAnalysis(db, relPath, language, hash, text, analysis, now) {
   for (const obj of extractDbObjects(text, relPath, symbols)) dbStmt.run(relPath, obj.symbol_id, obj.object_type, obj.object_name, obj.operation, obj.line);
 }
 
+function normalizeGoType(value) {
+  return String(value ?? "").replace(/\\s+/g, "");
+}
+
+function goTypeBase(value) {
+  let raw = String(value ?? "").trim();
+  while (raw.startsWith("(") && raw.endsWith(")")) raw = raw.slice(1, -1).trim();
+  raw = raw.replace(/^\\*+/, "");
+  const generic = raw.indexOf("[");
+  if (generic >= 0) raw = raw.slice(0, generic);
+  return raw.split(".").pop() ?? raw;
+}
+
+function parseJson(value, fallback) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function symbolShape(symbol) {
+  return {
+    params: parseJson(symbol.params_json, []).map((item) => normalizeGoType(item?.type)),
+    returns: parseJson(symbol.returns_json, []).map((item) => normalizeGoType(item?.type))
+  };
+}
+
+function sameTypeList(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function methodMatchesShape(symbol, shape) {
+  const actual = symbolShape(symbol);
+  const expectedParams = (shape?.params ?? []).map(normalizeGoType);
+  const expectedReturns = (shape?.returns ?? []).map(normalizeGoType);
+  return sameTypeList(actual.params, expectedParams) && sameTypeList(actual.returns, expectedReturns);
+}
+
 function resolveDependencies(db) {
-  const symbols = db.prepare("SELECT symbol_id,name,qualified_name FROM symbols").all();
+  const symbols = db.prepare(
+    `SELECT s.symbol_id,s.file_path,s.name,s.qualified_name,s.receiver,s.params_json,s.returns_json,
+            COALESCE(f.is_test,0) AS is_test
+       FROM symbols s
+       LEFT JOIN files f ON f.path=s.file_path`
+  ).all();
+
   const byQualified = new Map();
   const byName = new Map();
-  for (const s of symbols) {
-    if (!byQualified.has(s.qualified_name)) byQualified.set(s.qualified_name, []);
-    byQualified.get(s.qualified_name).push(s.symbol_id);
-    if (!byName.has(s.name)) byName.set(s.name, []);
-    byName.get(s.name).push(s.symbol_id);
+  const receiverGroups = new Map();
+
+  for (const symbol of symbols) {
+    if (!byQualified.has(symbol.qualified_name)) byQualified.set(symbol.qualified_name, []);
+    byQualified.get(symbol.qualified_name).push(symbol);
+    if (!byName.has(symbol.name)) byName.set(symbol.name, []);
+    byName.get(symbol.name).push(symbol);
+
+    if (!symbol.receiver || symbol.is_test) continue;
+    const receiverBase = goTypeBase(symbol.receiver);
+    if (!receiverBase) continue;
+    const dir = path.posix.dirname(String(symbol.file_path).replaceAll("\\", "/"));
+    const key = `${dir}::${receiverBase}`;
+    if (!receiverGroups.has(key)) {
+      receiverGroups.set(key, {
+        key,
+        dir,
+        receiver: receiverBase,
+        methods: new Map()
+      });
+    }
+    const group = receiverGroups.get(key);
+    if (!group.methods.has(symbol.name)) group.methods.set(symbol.name, []);
+    group.methods.get(symbol.name).push(symbol);
   }
-  const deps = db.prepare("SELECT id,to_ref FROM dependencies WHERE relation='calls'").all();
-  const update = db.prepare("UPDATE dependencies SET resolved_symbol_id=? WHERE id=?");
+
+  const deps = db.prepare(
+    `SELECT d.id,d.from_file,d.to_ref,d.metadata_json,COALESCE(f.is_test,0) AS is_test
+       FROM dependencies d
+       LEFT JOIN files f ON f.path=d.from_file
+      WHERE d.relation='calls'
+      ORDER BY d.id`
+  ).all();
+  const update = db.prepare(
+    "UPDATE dependencies SET resolved_symbol_id=?, metadata_json=? WHERE id=?"
+  );
+
   for (const dep of deps) {
     const raw = String(dep.to_ref ?? "");
+    const metadata = parseJson(dep.metadata_json, {});
     const tail = raw.split(".").pop();
     const exact = byQualified.get(raw) ?? [];
-    const simple = byName.get(tail) ?? [];
-    const resolved = exact.length === 1 ? exact[0] : (simple.length === 1 ? simple[0] : null);
-    update.run(resolved, dep.id);
+    let resolved = null;
+    let resolution = "call_unresolved";
+    let resolvedReceiver = null;
+    let candidateCount = null;
+
+    if (metadata.call_kind === "receiver_method" && metadata.receiver_type) {
+      const dir = path.posix.dirname(String(dep.from_file).replaceAll("\\", "/"));
+      const group = receiverGroups.get(`${dir}::${goTypeBase(metadata.receiver_type)}`);
+      const candidates = group?.methods.get(metadata.method || tail) ?? [];
+      candidateCount = candidates.length;
+      if (candidates.length === 1) {
+        resolved = candidates[0];
+        resolvedReceiver = group.receiver;
+        resolution = "receiver_type";
+      } else {
+        resolution = candidates.length > 1
+          ? "receiver_method_ambiguous"
+          : "receiver_method_not_found";
+      }
+    } else if (metadata.call_kind === "receiver_field_method" && metadata.field_type) {
+      if (metadata.field_kind === "interface") {
+        const interfaceMethods = Array.isArray(metadata.interface_methods)
+          ? metadata.interface_methods
+          : [];
+        if (metadata.interface_complete !== true || interfaceMethods.length === 0) {
+          resolution = "receiver_field_interface_incomplete";
+        } else {
+          const groups = [];
+          for (const group of receiverGroups.values()) {
+            let implementsInterface = true;
+            for (const method of interfaceMethods) {
+              const candidates = group.methods.get(method.name) ?? [];
+              if (!candidates.some((candidate) => methodMatchesShape(candidate, method))) {
+                implementsInterface = false;
+                break;
+              }
+            }
+            if (implementsInterface) groups.push(group);
+          }
+          candidateCount = groups.length;
+          if (groups.length === 1) {
+            const group = groups[0];
+            const methodShape = interfaceMethods.find((item) => item.name === (metadata.method || tail));
+            const targetCandidates = (group.methods.get(metadata.method || tail) ?? [])
+              .filter((candidate) => !methodShape || methodMatchesShape(candidate, methodShape));
+            if (targetCandidates.length === 1) {
+              resolved = targetCandidates[0];
+              resolvedReceiver = group.receiver;
+              resolution = "receiver_field_interface_unique_implementation";
+            } else {
+              resolution = "receiver_field_interface_target_ambiguous";
+            }
+          } else {
+            resolution = groups.length > 1
+              ? "receiver_field_interface_ambiguous_implementation"
+              : "receiver_field_interface_no_implementation";
+          }
+        }
+      } else if (metadata.field_kind === "concrete") {
+        const rawFieldType = String(metadata.field_type);
+        if (!rawFieldType.includes(".") && !/[\\[\\]{}]/.test(rawFieldType)) {
+          const dir = path.posix.dirname(String(dep.from_file).replaceAll("\\", "/"));
+          const group = receiverGroups.get(`${dir}::${goTypeBase(rawFieldType)}`);
+          const candidates = group?.methods.get(metadata.method || tail) ?? [];
+          candidateCount = candidates.length;
+          if (candidates.length === 1) {
+            resolved = candidates[0];
+            resolvedReceiver = group.receiver;
+            resolution = "receiver_field_concrete_type";
+          } else {
+            resolution = candidates.length > 1
+              ? "receiver_field_concrete_ambiguous"
+              : "receiver_field_concrete_not_found";
+          }
+        } else {
+          resolution = "receiver_field_concrete_external_unresolved";
+        }
+      } else {
+        resolution = "receiver_field_type_unresolved";
+      }
+    } else if (exact.length === 1) {
+      resolved = exact[0];
+      resolution = "qualified_name";
+    } else if (!raw.includes(".")) {
+      const simple = byName.get(tail) ?? [];
+      candidateCount = simple.length;
+      if (simple.length === 1) {
+        resolved = simple[0];
+        resolution = "unique_symbol_name";
+      } else {
+        resolution = simple.length > 1 ? "symbol_name_ambiguous" : "symbol_not_found";
+      }
+    } else {
+      resolution = "selector_receiver_unresolved";
+    }
+
+    const nextMetadata = {
+      ...metadata,
+      resolution,
+      ...(resolvedReceiver ? { resolved_receiver: resolvedReceiver } : {}),
+      ...(candidateCount === null ? {} : { candidate_count: candidateCount })
+    };
+    update.run(resolved?.symbol_id ?? null, JSON.stringify(nextMetadata), dep.id);
   }
 }
 
