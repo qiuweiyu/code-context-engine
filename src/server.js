@@ -64,7 +64,7 @@ server.registerTool(
       repo_root: z.string().min(1),
       start_nodes: z.array(z.string().min(1)).min(1).max(32),
       direction: z.enum(["forward", "reverse"]).optional(),
-      max_hops: z.number().int().min(1).max(4).optional(),
+      max_hops: z.number().int().min(1).max(6).optional(),
       branch_limit: z.number().int().min(1).max(100).optional(),
       node_limit: z.number().int().min(1).max(1000).optional(),
       min_confidence: z.enum(["exact", "static", "inferred"]).optional(),
