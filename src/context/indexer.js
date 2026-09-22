@@ -71,13 +71,13 @@ function insertAnalysis(db, relPath, language, hash, text, analysis, now) {
 }
 
 function normalizeGoType(value) {
-  return String(value ?? "").replace(/\\s+/g, "");
+  return String(value ?? "").replace(/\s+/g, "");
 }
 
 function goTypeBase(value) {
   let raw = String(value ?? "").trim();
   while (raw.startsWith("(") && raw.endsWith(")")) raw = raw.slice(1, -1).trim();
-  raw = raw.replace(/^\\*+/, "");
+  raw = raw.replace(/^\*+/, "");
   const generic = raw.indexOf("[");
   if (generic >= 0) raw = raw.slice(0, generic);
   return raw.split(".").pop() ?? raw;
@@ -221,7 +221,7 @@ function resolveDependencies(db) {
         }
       } else if (metadata.field_kind === "concrete") {
         const rawFieldType = String(metadata.field_type);
-        if (!rawFieldType.includes(".") && !/[\\[\\]{}]/.test(rawFieldType)) {
+        if (!rawFieldType.includes(".") && !["[", "]", "{", "}"].some((token) => rawFieldType.includes(token))) {
           const dir = path.posix.dirname(String(dep.from_file).replaceAll("\\", "/"));
           const group = receiverGroups.get(`${dir}::${goTypeBase(rawFieldType)}`);
           const candidates = group?.methods.get(metadata.method || tail) ?? [];
