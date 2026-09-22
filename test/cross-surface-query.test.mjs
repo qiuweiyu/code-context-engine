@@ -103,6 +103,14 @@ test("query crosses shared data flow into a differently named client surface", a
       );
 
       const routeNode = "route:server:GET:" + routePath;
+      const dbNode = "db:table:public.manual_task_publications";
+      insertEdge(db, {
+        id: "db:repo-publications",
+        from: "symbol:" + repoSymbol,
+        to: dbNode,
+        type: "db_read",
+        sourceId: 0
+      });
       insertEdge(db, {
         id: "call:service-repo",
         from: "symbol:" + serviceSymbol,
@@ -162,7 +170,7 @@ test("query crosses shared data flow into a differently named client surface", a
 
     assert.ok(
       query.query_expansion.graph_seed_nodes.includes(
-        "symbol:go:backend/assignment/repository.go::*Repository.List"
+        "db:table:public.manual_task_publications"
       )
     );
     assert.ok(query.graph_expansion.reverse_steps >= 4);
