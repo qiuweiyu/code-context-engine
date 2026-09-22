@@ -134,10 +134,10 @@ test("bounded forward traversal follows deterministic edge priority", () => {
     ]);
     assert.equal(result.steps.every((step) => step.confidence === "static"), true);
     assert.equal(result.visited_nodes.length, 4);
-    assert.equal(
-      result.visited_nodes.find((node) => node.node_id === handler)?.file_path,
-      "backend/api.go"
-    );
+    const handlerNode = result.visited_nodes.find((node) => node.node_id === handler);
+    assert.equal(handlerNode?.file_path, "backend/api.go");
+    assert.equal(handlerNode?.kind, "symbol");
+    assert.equal(handlerNode?.symbol_kind, "method");
     assert.ok(result.frontier.some(
       (item) => item.reason === "branch_limit" && item.node_id === frontend
     ));
