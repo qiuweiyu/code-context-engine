@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { openStore } from "./store.js";
 import { expandQuery } from "../prefilter.js";
+import { traverseGraph } from "./traversal.js";
 
 function loadProjectAliases(repoRoot) {
   const file = path.join(repoRoot, ".context-query-aliases.json");
@@ -72,6 +73,87 @@ function fileScoreMultiplier(filePath, terms) {
   return 1;
 }
 
+const QUERY_GRAPH_FORWARD_TYPES = Object.freeze([
+  "page_api",
+  "api_request",
+  "route_handler",
+  "call",
+  "db_read",
+  "db_write"
+]);
+
+const QUERY_GRAPH_REVERSE_TYPES = Object.freeze([
+  "page_api",
+  "api_request",
+  "route_handler",
+  "call",
+  "test_of"
+]);
+
+function graphNodeScore(direction, hop) {
+  const base = direction === "forward" ? 10 : 8;
+  return Math.max(2, base - Math.max(0, hop - 1) * 2);
+}
+
+function expandFromGraph(db, files, seedNodes) {
+  const before = new Set(files.keys());
+  let forwardSteps = 0;
+  let reverseSteps = 0;
+  const visitedSeeds = [];
+
+  for (const seed of seedNodes.slice(0, 12)) {
+    visitedSeeds.push(seed);
+    for (const [direction, edgeTypes] of [
+      ["forward", QUERY_GRAPH_FORWARD_TYPES],
+      ["reverse", QUERY_GRAPH_REVERSE_TYPES]
+    ]) {
+      const traversal = traverseGraph(db, {
+        startNodeIds: seed,
+        direction,
+        maxHops: direction === "forward" ? 4 : 2,
+        branchLimit: 8,
+        nodeLimit: 64,
+        minConfidence: "static",
+        edgeTypes
+      });
+
+      if (direction === "forward") forwardSteps += traversal.steps.length;
+      else reverseSteps += traversal.steps.length;
+
+      const hopByNode = new Map([[seed, 0]]);
+      const edgeTypeByNode = new Map();
+      for (const step of traversal.steps) {
+        const current = hopByNode.get(step.from_node_id) ?? Math.max(0, step.hop - 1);
+        const next = Math.min(step.hop, current + 1);
+        const previous = hopByNode.get(step.next_node_id);
+        if (previous === undefined || next < previous) hopByNode.set(step.next_node_id, next);
+        if (!edgeTypeByNode.has(step.next_node_id)) edgeTypeByNode.set(step.next_node_id, step.type);
+      }
+
+      for (const node of traversal.visited_nodes) {
+        if (!node.file_path || node.node_id === seed) continue;
+        const hop = hopByNode.get(node.node_id) ?? 1;
+        const type = edgeTypeByNode.get(node.node_id) ?? "typed_edge";
+        addFile(
+          files,
+          node.file_path,
+          graphNodeScore(direction, hop),
+          `graph_${direction}:${type}`,
+          node.symbol_id ?? null,
+          "typed_graph"
+        );
+      }
+    }
+  }
+
+  return {
+    seed_nodes: visitedSeeds,
+    added_files: [...files.keys()].filter((file) => !before.has(file)).length,
+    forward_steps: forwardSteps,
+    reverse_steps: reverseSteps
+  };
+}
+
 export function queryContext({ repoRoot, task, indexDir = ".context-index", maxFiles = 12 }) {
   const dir = path.isAbsolute(indexDir) ? indexDir : path.join(repoRoot, indexDir);
   const { db } = openStore(dir);
@@ -122,6 +204,7 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
     rankedSymbols.sort((a,b)=>b.score-a.score);
     for (const symbol of rankedSymbols.slice(0, 20)) addFile(files, symbol.file_path, symbol.score, "symbol_match", symbol.symbol_id, "symbol");
 
+    const matchedRouteNodes = [];
     const routes = db.prepare("SELECT * FROM routes").all();
     for (const route of routes) {
       const routeText = `${route.method} ${route.route_path}`;
@@ -129,6 +212,7 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       const score = textScore(routeText, terms, 10) + projectScore;
       if (score > 0 && (projectTerms.length === 0 || projectScore > 0)) {
         addFile(files, route.file_path, score, `route:${route.method} ${route.route_path}`, route.symbol_id, "route");
+        matchedRouteNodes.push(`route:${route.direction}:${route.method}:${route.route_path}`);
       }
     }
     const dbObjects = db.prepare("SELECT * FROM db_objects").all();
@@ -150,6 +234,22 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
     }
 
     const seedSymbols = new Set([...files.values()].flatMap((x)=>[...x.symbols]));
+    const nonTestFiles = new Set(
+      db.prepare("SELECT path FROM files WHERE is_test=0").all().map((row) => row.path)
+    );
+    const fileSeeds = [...files.values()]
+      .filter((entry) => nonTestFiles.has(entry.path))
+      .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path))
+      .slice(0, 8)
+      .map((entry) => `file:${entry.path}`);
+    const symbolSeeds = [...seedSymbols].slice(0, 8).map((symbolId) => `symbol:${symbolId}`);
+    const graphSeeds = [...new Set([
+      ...symbolSeeds,
+      ...matchedRouteNodes.slice(0, 4),
+      ...fileSeeds
+    ])].slice(0, 12);
+    const graphExpansion = expandFromGraph(db, files, graphSeeds);
+
     for (const symbolId of [...seedSymbols].slice(0, 30)) {
       const edges = db.prepare(`SELECT d.*,s.file_path AS target_file FROM dependencies d LEFT JOIN symbols s ON s.symbol_id=d.resolved_symbol_id WHERE d.from_symbol_id=? OR d.resolved_symbol_id=?`).all(symbolId,symbolId);
       for (const edge of edges) {
@@ -205,7 +305,13 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       query_expansion: {
         applied_aliases: expansion.applied_aliases,
         project_terms: projectTerms,
-        retrieval_mode: projectTerms.length > 0 ? "project_anchor" : "lexical"
+        retrieval_mode: projectTerms.length > 0 ? "project_anchor" : "lexical",
+        graph_seed_nodes: graphExpansion.seed_nodes
+      },
+      graph_expansion: {
+        added_files: graphExpansion.added_files,
+        forward_steps: graphExpansion.forward_steps,
+        reverse_steps: graphExpansion.reverse_steps
       },
       features: relevantFeatures,
       must_read: mustRead.map((x)=>({path:x.path,score:Number(x.score.toFixed(2)),reasons:x.reasons,symbols:x.symbols})),
