@@ -63,7 +63,7 @@ test("Go receiver field interface call resolves only with one complete implement
     assert.equal(result.manifest.schema_version, 8);
     assert.equal(
       db.prepare("SELECT DISTINCT parser_version AS v FROM files").get().v,
-      "0.2.4"
+      "0.2.5"
     );
     const edge = callEdge(db, "go:backend/catalog/api.go::*API.Handle");
     assert.ok(edge);
