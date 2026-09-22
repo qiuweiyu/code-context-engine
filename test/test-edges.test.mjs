@@ -19,6 +19,7 @@ test("test mappings become typed test_of edges with conservative confidence", as
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "cce-test-edges-"));
   try {
     await fs.mkdir(path.join(root, "backend/store"), { recursive: true });
+    await fs.mkdir(path.join(root, "admin"), { recursive: true });
     await fs.writeFile(
       path.join(root, "backend/store/service.go"),
       [
@@ -35,8 +36,26 @@ test("test mappings become typed test_of edges with conservative confidence", as
         "func TestLoad(t *testing.T) {",
         "  if err := Load(); err != nil { t.Fatal(err) }",
         "}",
+        "func TestLocalCancel(t *testing.T) {",
+        "  cancel := func() {}",
+        "  cancel()",
+        "}",
+        "func TestHelper(t *testing.T) { helper() }",
         ""
       ].join("\n")
+    );
+
+    await fs.writeFile(
+      path.join(root, "backend/store/helper_test.go"),
+      [
+        "package store",
+        "func helper() {}",
+        ""
+      ].join("\n")
+    );
+    await fs.writeFile(
+      path.join(root, "admin/cancel.ts"),
+      "export function cancel() {}\n"
     );
 
     await git(root, "init", "-q");
@@ -52,6 +71,26 @@ test("test mappings become typed test_of edges with conservative confidence", as
     try {
       const mappings = db.prepare("SELECT * FROM tests ORDER BY id").all();
       assert.equal(mappings.length, 2);
+      assert.equal(
+        mappings.some((mapping) => mapping.target_file === "backend/store/helper_test.go"),
+        false
+      );
+      assert.equal(
+        mappings.some((mapping) => mapping.target_file === "admin/cancel.ts"),
+        false
+      );
+
+      const cancelDependency = db.prepare(
+        "SELECT * FROM dependencies WHERE from_file='backend/store/service_test.go' AND relation='calls' AND to_ref='cancel'"
+      ).get();
+      assert.ok(cancelDependency);
+      assert.equal(cancelDependency.resolved_symbol_id, null);
+
+      const helperDependency = db.prepare(
+        "SELECT * FROM dependencies WHERE from_file='backend/store/service_test.go' AND relation='calls' AND to_ref='helper'"
+      ).get();
+      assert.ok(helperDependency);
+      assert.equal(helperDependency.resolved_symbol_id, "go:backend/store/helper_test.go::helper");
 
       const edges = db.prepare(
         "SELECT * FROM edges WHERE type='test_of' ORDER BY source_id"

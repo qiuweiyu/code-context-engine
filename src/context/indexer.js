@@ -131,9 +131,22 @@ function methodMatchesShape(symbol, shape) {
   return sameTypeList(actualParams, expectedParams) && sameTypeList(actualReturns, expectedReturns);
 }
 
+function callCandidateInScope(dep, candidate) {
+  if (!dep?.from_language || candidate?.language !== dep.from_language) return false;
+
+  if (dep.from_language === "go") {
+    const fromDir = path.posix.dirname(String(dep.from_file).replaceAll("\\", "/"));
+    const targetDir = path.posix.dirname(String(candidate.file_path).replaceAll("\\", "/"));
+    return fromDir === targetDir
+      && String(candidate.package_name ?? "") === String(dep.from_package_name ?? "");
+  }
+
+  return candidate.file_path === dep.from_file;
+}
+
 function resolveDependencies(db) {
   const symbols = db.prepare(
-    `SELECT s.symbol_id,s.file_path,s.name,s.qualified_name,s.receiver,s.params_json,s.returns_json,
+    `SELECT s.symbol_id,s.file_path,s.language,s.name,s.qualified_name,s.receiver,s.params_json,s.returns_json,
             COALESCE(f.is_test,0) AS is_test,f.package_name
        FROM symbols s
        LEFT JOIN files f ON f.path=s.file_path`
@@ -169,7 +182,8 @@ function resolveDependencies(db) {
   }
 
   const deps = db.prepare(
-    `SELECT d.id,d.from_file,d.to_ref,d.metadata_json,COALESCE(f.is_test,0) AS is_test
+    `SELECT d.id,d.from_file,d.to_ref,d.metadata_json,
+            COALESCE(f.is_test,0) AS is_test,f.language AS from_language,f.package_name AS from_package_name
        FROM dependencies d
        LEFT JOIN files f ON f.path=d.from_file
       WHERE d.relation='calls'
@@ -183,7 +197,8 @@ function resolveDependencies(db) {
     const raw = String(dep.to_ref ?? "");
     const metadata = parseJson(dep.metadata_json, {});
     const tail = raw.split(".").pop();
-    const exact = byQualified.get(raw) ?? [];
+    const exact = (byQualified.get(raw) ?? [])
+      .filter((candidate) => callCandidateInScope(dep, candidate));
     let resolved = null;
     let resolution = "call_unresolved";
     let resolvedReceiver = null;
@@ -272,7 +287,8 @@ function resolveDependencies(db) {
       resolved = exact[0];
       resolution = "qualified_name";
     } else if (!raw.includes(".")) {
-      const simple = byName.get(tail) ?? [];
+      const simple = (byName.get(tail) ?? [])
+        .filter((candidate) => callCandidateInScope(dep, candidate));
       candidateCount = simple.length;
       if (simple.length === 1) {
         resolved = simple[0];
@@ -306,8 +322,20 @@ function rebuildTestMappings(db) {
     if (normalized !== testFile && allFiles.has(normalized)) candidates.push({ file: normalized, confidence: 0.98, reason: "filename_pair" });
     const deps = db.prepare(`SELECT DISTINCT resolved_symbol_id FROM dependencies WHERE from_file=? AND relation='calls' AND resolved_symbol_id IS NOT NULL`).all(testFile);
     for (const dep of deps) {
-      const target = db.prepare("SELECT file_path FROM symbols WHERE symbol_id=?").get(dep.resolved_symbol_id);
-      if (target && target.file_path !== testFile) candidates.push({ file: target.file_path, symbol: dep.resolved_symbol_id, confidence: 0.90, reason: "test_calls_symbol" });
+      const target = db.prepare(
+        `SELECT s.file_path,COALESCE(f.is_test,0) AS is_test
+           FROM symbols s
+           LEFT JOIN files f ON f.path=s.file_path
+          WHERE s.symbol_id=?`
+      ).get(dep.resolved_symbol_id);
+      if (target && !target.is_test && target.file_path !== testFile) {
+        candidates.push({
+          file: target.file_path,
+          symbol: dep.resolved_symbol_id,
+          confidence: 0.90,
+          reason: "test_calls_symbol"
+        });
+      }
     }
     const seen = new Set();
     for (const c of candidates) {
