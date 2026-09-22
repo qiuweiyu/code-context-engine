@@ -30,6 +30,11 @@ function migrateSchema(db, previousVersion) {
       db.exec("ALTER TABLE dependencies ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'");
     }
   }
+  if (previousVersion < 8) {
+    if (!hasColumn(db, "files", "package_name")) {
+      db.exec("ALTER TABLE files ADD COLUMN package_name TEXT");
+    }
+  }
 }
 
 export function openStore(indexDir) {
