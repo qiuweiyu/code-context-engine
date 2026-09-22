@@ -175,6 +175,7 @@ export function traverseGraph(db, {
   direction = "forward",
   maxHops = 3,
   branchLimit = 8,
+  nodeLimit = 128,
   minConfidence = "static",
   edgeTypes = null
 } = {}) {
@@ -189,6 +190,10 @@ export function traverseGraph(db, {
   const starts = normalizeStartNodes(startNodeIds);
   const hopLimit = asPositiveInteger(maxHops, "maxHops", 3, 4);
   const widthLimit = asPositiveInteger(branchLimit, "branchLimit", 8, 100);
+  const totalNodeLimit = asPositiveInteger(nodeLimit, "nodeLimit", 128, 1000);
+  if (starts.length > totalNodeLimit) {
+    throw new Error("startNodeIds exceed nodeLimit");
+  }
   const types = normalizeEdgeTypes(edgeTypes);
   const minRank = CONFIDENCE_RANK.get(minConfidence);
 
@@ -200,6 +205,17 @@ export function traverseGraph(db, {
   const unresolvedLinks = [];
   let cycleSkips = 0;
   let omittedUnresolved = 0;
+  let omittedFrontier = 0;
+
+  const pushFrontier = (item) => {
+    if (frontier.length < totalNodeLimit) frontier.push(item);
+    else omittedFrontier++;
+  };
+
+  const pushUnresolved = (item) => {
+    if (unresolvedLinks.length < totalNodeLimit) unresolvedLinks.push(item);
+    else omittedUnresolved++;
+  };
 
   for (let cursor = 0; cursor < queue.length; cursor++) {
     const current = queue[cursor];
@@ -207,7 +223,7 @@ export function traverseGraph(db, {
 
     const unresolved = edges.filter((edge) => edge.confidence === "unresolved");
     for (const edge of unresolved.slice(0, widthLimit)) {
-      unresolvedLinks.push({
+      pushUnresolved({
         node_id: current.node_id,
         ...edgeSummary(edge, direction, current.hop + 1)
       });
@@ -219,7 +235,7 @@ export function traverseGraph(db, {
       if (edge.confidence === "unresolved") continue;
       const rank = CONFIDENCE_RANK.get(edge.confidence) ?? -1;
       if (rank < minRank) {
-        frontier.push({
+        pushFrontier({
           reason: "confidence_threshold",
           node_id: current.node_id,
           ...edgeSummary(edge, direction, current.hop + 1)
@@ -231,14 +247,14 @@ export function traverseGraph(db, {
 
     if (current.hop >= hopLimit) {
       for (const edge of eligible.slice(0, widthLimit)) {
-        frontier.push({
+        pushFrontier({
           reason: "max_hops",
           node_id: current.node_id,
           ...edgeSummary(edge, direction, current.hop + 1)
         });
       }
       if (eligible.length > widthLimit) {
-        frontier.push({
+        pushFrontier({
           reason: "branch_limit",
           node_id: current.node_id,
           hop: current.hop + 1,
@@ -250,7 +266,7 @@ export function traverseGraph(db, {
 
     const selected = eligible.slice(0, widthLimit);
     if (eligible.length > widthLimit) {
-      frontier.push({
+      pushFrontier({
         reason: "branch_limit",
         node_id: current.node_id,
         hop: current.hop + 1,
@@ -262,6 +278,14 @@ export function traverseGraph(db, {
       const nextNodeId = otherNode(edge, direction);
       if (visited.has(nextNodeId)) {
         cycleSkips++;
+        continue;
+      }
+      if (visited.size >= totalNodeLimit) {
+        pushFrontier({
+          reason: "node_limit",
+          node_id: current.node_id,
+          ...edgeSummary(edge, direction, current.hop + 1, nextNodeId)
+        });
         continue;
       }
       const hop = current.hop + 1;
@@ -278,6 +302,7 @@ export function traverseGraph(db, {
     limits: {
       max_hops: hopLimit,
       branch_limit: widthLimit,
+      node_limit: totalNodeLimit,
       min_confidence: minConfidence,
       edge_types: types
     },
@@ -291,6 +316,7 @@ export function traverseGraph(db, {
       frontier: frontier.length,
       unresolved_links: unresolvedLinks.length,
       omitted_unresolved: omittedUnresolved,
+      omitted_frontier: omittedFrontier,
       cycle_skips: cycleSkips
     }
   };
