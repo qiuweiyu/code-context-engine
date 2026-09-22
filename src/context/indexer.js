@@ -28,8 +28,17 @@ async function readLocalSource(repoRoot, relPath) {
 
 function insertAnalysis(db, relPath, language, hash, text, analysis, now) {
   const lineCount = text === "" ? 0 : text.split(/\r?\n/).length;
-  db.prepare(`INSERT OR REPLACE INTO files(path,language,content_hash,line_count,parser_version,indexed_at,is_test) VALUES(?,?,?,?,?,?,?)`)
-    .run(relPath, language, hash, lineCount, PARSER_VERSION, now, isTestPath(relPath) ? 1 : 0);
+  db.prepare(`INSERT OR REPLACE INTO files(path,language,content_hash,line_count,parser_version,indexed_at,is_test,package_name) VALUES(?,?,?,?,?,?,?,?)`)
+    .run(
+      relPath,
+      language,
+      hash,
+      lineCount,
+      PARSER_VERSION,
+      now,
+      isTestPath(relPath) ? 1 : 0,
+      language === "go" ? (analysis.package ?? null) : null
+    );
 
   const symbolStmt = db.prepare(`INSERT INTO symbols(symbol_id,file_path,language,name,qualified_name,kind,receiver,signature,params_json,returns_json,description,description_source,line_start,line_end,implementation_hash,semantic_hash)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
@@ -102,17 +111,30 @@ function sameTypeList(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+function normalizeGoTypeForPackage(value, packageName) {
+  const normalized = normalizeGoType(value);
+  const pkg = String(packageName ?? "").trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(pkg)) return normalized;
+  return normalized.replace(new RegExp(`\\b${pkg}\\.`, "g"), "");
+}
+
 function methodMatchesShape(symbol, shape) {
   const actual = symbolShape(symbol);
-  const expectedParams = (shape?.params ?? []).map(normalizeGoType);
-  const expectedReturns = (shape?.returns ?? []).map(normalizeGoType);
-  return sameTypeList(actual.params, expectedParams) && sameTypeList(actual.returns, expectedReturns);
+  const expectedParams = (shape?.params ?? [])
+    .map((value) => normalizeGoTypeForPackage(value, symbol.package_name));
+  const expectedReturns = (shape?.returns ?? [])
+    .map((value) => normalizeGoTypeForPackage(value, symbol.package_name));
+  const actualParams = actual.params
+    .map((value) => normalizeGoTypeForPackage(value, symbol.package_name));
+  const actualReturns = actual.returns
+    .map((value) => normalizeGoTypeForPackage(value, symbol.package_name));
+  return sameTypeList(actualParams, expectedParams) && sameTypeList(actualReturns, expectedReturns);
 }
 
 function resolveDependencies(db) {
   const symbols = db.prepare(
     `SELECT s.symbol_id,s.file_path,s.name,s.qualified_name,s.receiver,s.params_json,s.returns_json,
-            COALESCE(f.is_test,0) AS is_test
+            COALESCE(f.is_test,0) AS is_test,f.package_name
        FROM symbols s
        LEFT JOIN files f ON f.path=s.file_path`
   ).all();
@@ -137,6 +159,7 @@ function resolveDependencies(db) {
         key,
         dir,
         receiver: receiverBase,
+        package_name: symbol.package_name ?? null,
         methods: new Map()
       });
     }
@@ -164,6 +187,7 @@ function resolveDependencies(db) {
     let resolved = null;
     let resolution = "call_unresolved";
     let resolvedReceiver = null;
+    let resolvedPackage = null;
     let candidateCount = null;
 
     if (metadata.call_kind === "receiver_method" && metadata.receiver_type) {
@@ -174,6 +198,7 @@ function resolveDependencies(db) {
       if (candidates.length === 1) {
         resolved = candidates[0];
         resolvedReceiver = group.receiver;
+        resolvedPackage = group.package_name;
         resolution = "receiver_type";
       } else {
         resolution = candidates.length > 1
@@ -209,6 +234,7 @@ function resolveDependencies(db) {
             if (targetCandidates.length === 1) {
               resolved = targetCandidates[0];
               resolvedReceiver = group.receiver;
+              resolvedPackage = group.package_name;
               resolution = "receiver_field_interface_unique_implementation";
             } else {
               resolution = "receiver_field_interface_target_ambiguous";
@@ -229,6 +255,7 @@ function resolveDependencies(db) {
           if (candidates.length === 1) {
             resolved = candidates[0];
             resolvedReceiver = group.receiver;
+            resolvedPackage = group.package_name;
             resolution = "receiver_field_concrete_type";
           } else {
             resolution = candidates.length > 1
@@ -261,6 +288,7 @@ function resolveDependencies(db) {
       ...metadata,
       resolution,
       ...(resolvedReceiver ? { resolved_receiver: resolvedReceiver } : {}),
+      ...(resolvedPackage ? { resolved_package: resolvedPackage } : {}),
       ...(candidateCount === null ? {} : { candidate_count: candidateCount })
     };
     update.run(resolved?.symbol_id ?? null, JSON.stringify(nextMetadata), dep.id);

@@ -66,6 +66,7 @@ export function dependencyToTypedEdge(dep) {
     ...(metadata.field_type ? { field_type: metadata.field_type } : {}),
     ...(metadata.field_kind ? { field_kind: metadata.field_kind } : {}),
     ...(metadata.resolved_receiver ? { resolved_receiver: metadata.resolved_receiver } : {}),
+    ...(metadata.resolved_package ? { resolved_package: metadata.resolved_package } : {}),
     ...(Number.isInteger(metadata.candidate_count) ? { candidate_count: metadata.candidate_count } : {})
   };
 

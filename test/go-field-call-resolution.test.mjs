@@ -14,10 +14,13 @@ async function git(root, ...args) {
   await execFileAsync("git", ["-C", root, ...args], { windowsHide: true });
 }
 
-async function indexedGoFixture(source) {
+async function indexedGoFiles(files) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "cce-go-field-call-"));
-  await fs.mkdir(path.join(root, "backend/catalog"), { recursive: true });
-  await fs.writeFile(path.join(root, "backend/catalog/api.go"), source);
+  for (const [relPath, source] of Object.entries(files)) {
+    const full = path.join(root, relPath);
+    await fs.mkdir(path.dirname(full), { recursive: true });
+    await fs.writeFile(full, source);
+  }
   await git(root, "init", "-q");
   await git(root, "config", "user.email", "test@example.com");
   await git(root, "config", "user.name", "Test");
@@ -26,6 +29,10 @@ async function indexedGoFixture(source) {
   const result = await indexRepository({ repoRoot: root });
   const db = new DatabaseSync(path.join(root, ".context-index/index.sqlite"));
   return { root, result, db };
+}
+
+async function indexedGoFixture(source) {
+  return indexedGoFiles({ "backend/catalog/api.go": source });
 }
 
 function callEdge(db, fromSymbol) {
@@ -53,10 +60,10 @@ test("Go receiver field interface call resolves only with one complete implement
   ].join("\n");
   const { root, result, db } = await indexedGoFixture(source);
   try {
-    assert.equal(result.manifest.schema_version, 7);
+    assert.equal(result.manifest.schema_version, 8);
     assert.equal(
       db.prepare("SELECT DISTINCT parser_version AS v FROM files").get().v,
-      "0.2.3"
+      "0.2.4"
     );
     const edge = callEdge(db, "go:backend/catalog/api.go::*API.Handle");
     assert.ok(edge);
@@ -67,6 +74,52 @@ test("Go receiver field interface call resolves only with one complete implement
     assert.equal(evidence.receiver_field, "service");
     assert.equal(evidence.field_type, "CatalogService");
     assert.equal(evidence.resolved_receiver, "Service");
+    assert.equal(evidence.candidate_count, 1);
+  } finally {
+    db.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Go interface signature resolves across package qualification with package evidence", async () => {
+  const { root, result, db } = await indexedGoFiles({
+    "backend/gateway/api.go": [
+      "package gateway",
+      "import (",
+      "  \"context\"",
+      "  \"example/catalog\"",
+      ")",
+      "type CatalogService interface {",
+      "  List(context.Context) (catalog.Result, error)",
+      "  Get(context.Context, int) (catalog.Result, error)",
+      "}",
+      "type API struct{ service CatalogService }",
+      "func (api *API) Handle(ctx context.Context) error { _, err := api.service.List(ctx); return err }",
+      ""
+    ].join("\n"),
+    "backend/catalog/service.go": [
+      "package catalog",
+      "import \"context\"",
+      "type Result struct{ ID int }",
+      "type Service struct{}",
+      "func (s *Service) List(ctx context.Context) (Result, error) { return Result{}, nil }",
+      "func (s *Service) Get(ctx context.Context, id int) (Result, error) { return Result{}, nil }",
+      ""
+    ].join("\n")
+  });
+  try {
+    assert.equal(result.manifest.schema_version, 8);
+    assert.equal(
+      db.prepare("SELECT package_name FROM files WHERE path='backend/catalog/service.go'").get().package_name,
+      "catalog"
+    );
+    const edge = callEdge(db, "go:backend/gateway/api.go::*API.Handle");
+    assert.ok(edge);
+    assert.equal(edge.confidence, "static");
+    assert.equal(edge.to_node_id, "symbol:go:backend/catalog/service.go::*Service.List");
+    const evidence = JSON.parse(edge.evidence_json);
+    assert.equal(evidence.resolution, "receiver_field_interface_unique_implementation");
+    assert.equal(evidence.resolved_package, "catalog");
     assert.equal(evidence.candidate_count, 1);
   } finally {
     db.close();
