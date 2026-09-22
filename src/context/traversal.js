@@ -132,9 +132,14 @@ function describeNode(db, nodeId) {
       `SELECT symbol_id,file_path,language,name,qualified_name,kind,line_start,line_end
        FROM symbols WHERE symbol_id=?`
     ).get(symbolId);
-    return row
-      ? { node_id: nodeId, kind: "symbol", ...row }
-      : { node_id: nodeId, kind: "symbol", symbol_id: symbolId };
+    if (!row) return { node_id: nodeId, kind: "symbol", symbol_id: symbolId };
+    const { kind: symbolKind, ...symbol } = row;
+    return {
+      node_id: nodeId,
+      kind: "symbol",
+      symbol_kind: symbolKind,
+      ...symbol
+    };
   }
 
   if (nodeId.startsWith("file:")) {
