@@ -1,5 +1,5 @@
-export const SCHEMA_VERSION = 7;
-export const PARSER_VERSION = "0.2.3";
+export const SCHEMA_VERSION = 8;
+export const PARSER_VERSION = "0.2.4";
 
 export const SCHEMA_SQL = `
 PRAGMA foreign_keys = ON;
@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS files (
   line_count INTEGER NOT NULL,
   parser_version TEXT NOT NULL,
   indexed_at TEXT NOT NULL,
-  is_test INTEGER NOT NULL DEFAULT 0 CHECK (is_test IN (0,1))
+  is_test INTEGER NOT NULL DEFAULT 0 CHECK (is_test IN (0,1)),
+  package_name TEXT
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS symbols (
