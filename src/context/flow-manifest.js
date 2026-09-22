@@ -1,3 +1,5 @@
+import path from "node:path";
+import { openStore } from "./store.js";
 import { traverseGraph } from "./traversal.js";
 
 export const FLOW_MANIFEST_VERSION = 1;
@@ -220,4 +222,20 @@ export function buildFlowManifest(db, {
     },
     flows
   };
+}
+
+
+export function buildRepositoryFlowManifest({
+  repoRoot,
+  indexDir = ".context-index",
+  ...options
+} = {}) {
+  if (!repoRoot) throw new Error("repoRoot is required");
+  const dir = path.isAbsolute(indexDir) ? indexDir : path.join(repoRoot, indexDir);
+  const { db } = openStore(dir);
+  try {
+    return buildFlowManifest(db, options);
+  } finally {
+    db.close();
+  }
 }
