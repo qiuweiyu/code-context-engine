@@ -95,6 +95,10 @@ node .\src\cli.js query --repo "D:\Path\To\YourProject" --task "edit an unpublis
 
 Read `must_read` first, then expand into `maybe_read` only when necessary. A missing result is not proof that a feature does not exist.
 
+The query result also reports `query_expansion.graph_seed_nodes`, `graph_expansion`, and `selection.intent_reserved_files`. CCE can expand from lexical/project-alias seeds through static typed edges such as `page_api`, `api_request`, `route_handler`, `call`, `db_read`, `db_write`, and `test_of`. Query traversal is bounded to at most 6 hops and does not traverse unresolved links.
+
+When the task explicitly names multiple surfaces (for example admin UI and miniprogram), graph-discovered files matching those explicit path intents receive a small bounded reservation in final Top-N selection.
+
 
 ## Project-specific query aliases
 
@@ -116,7 +120,7 @@ After code changes, run the same index command again:
 node .\src\cli.js index --repo "D:\Path\To\YourProject"
 ```
 
-Unchanged files are skipped by content hash; changed files are re-indexed.
+Unchanged files are skipped by content hash; changed files are re-indexed. Derived graph edges are rebuilt from the current facts during indexing, so after upgrading CCE logic that changes edge construction, run the normal index command even when `changed_files = 0`; `--force` is not required unless the parser/schema itself requires a full rebuild.
 
 Recommended daily cycle:
 
