@@ -45,13 +45,28 @@ export function dependencyToTypedEdge(dep) {
     toNodeId = nodeId("ref", `${type}:${dep.to_ref}`);
   }
 
+  let metadata = {};
+  try {
+    metadata = dep.metadata_json ? JSON.parse(dep.metadata_json) : {};
+  } catch {
+    metadata = {};
+  }
+
   const evidence = {
     type: confidence === "unresolved" ? "unresolved_reference" : "static_resolution",
     source: "dependencies",
     source_id: dep.id,
     relation: dep.relation,
     from_file: dep.from_file,
-    to_ref: dep.to_ref
+    to_ref: dep.to_ref,
+    ...(metadata.resolution ? { resolution: metadata.resolution } : {}),
+    ...(metadata.call_kind ? { call_kind: metadata.call_kind } : {}),
+    ...(metadata.receiver_type ? { receiver_type: metadata.receiver_type } : {}),
+    ...(metadata.receiver_field ? { receiver_field: metadata.receiver_field } : {}),
+    ...(metadata.field_type ? { field_type: metadata.field_type } : {}),
+    ...(metadata.field_kind ? { field_kind: metadata.field_kind } : {}),
+    ...(metadata.resolved_receiver ? { resolved_receiver: metadata.resolved_receiver } : {}),
+    ...(Number.isInteger(metadata.candidate_count) ? { candidate_count: metadata.candidate_count } : {})
   };
 
   return {
