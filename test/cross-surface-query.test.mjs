@@ -88,6 +88,35 @@ test("query crosses shared data flow into a differently named client surface", a
         name: "getAssignments"
       });
 
+      for (let i = 0; i < 6; i++) {
+        const decoyFile = `backend/manualtask/decoy-${i}.go`;
+        const decoySymbol = `go:backend/manualtask/decoy-${i}.go::ReadDraft`;
+        insertFile(db, decoyFile, "go");
+        insertSymbol(db, {
+          id: decoySymbol,
+          file: decoyFile,
+          language: "go",
+          name: "ReadDraft"
+        });
+        db.prepare(`INSERT INTO db_objects(
+          file_path,symbol_id,object_type,object_name,operation,line
+        ) VALUES(?,?,?,?,?,?)`).run(
+          decoyFile,
+          decoySymbol,
+          "table",
+          `public.manual_task_draft_${i}`,
+          "select",
+          4
+        );
+        insertEdge(db, {
+          id: `db:decoy-${i}`,
+          from: "symbol:" + decoySymbol,
+          to: `db:table:public.manual_task_draft_${i}`,
+          type: "db_read",
+          sourceId: 100 + i
+        });
+      }
+
       db.prepare(`INSERT INTO db_objects(
         file_path,symbol_id,object_type,object_name,operation,line
       ) VALUES(?,?,?,?,?,?)`).run(
@@ -190,6 +219,16 @@ test("query crosses shared data flow into a differently named client surface", a
       query.query_expansion.graph_seed_nodes.includes(
         "db:table:public.manual_task_publications"
       )
+    );
+    assert.equal(
+      query.query_expansion.graph_seed_nodes.filter((node) =>
+        node.includes("manual_task_draft_")
+      ).length < 5,
+      true
+    );
+    assert.equal(
+      query.query_expansion.graph_seed_nodes.some((node) => /test/i.test(node)),
+      false
     );
     assert.ok(query.graph_expansion.reverse_steps >= 12);
     assert.ok(query.graph_expansion.import_reverse_steps >= 1);
