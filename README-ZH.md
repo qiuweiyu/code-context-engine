@@ -110,33 +110,33 @@ Human / IDE / Coding Agent
 }
 ```
 
-## Feature Flow 的目标
+## Typed Graph 与 Feature Flow
 
-CCE 不只是记录“有哪些方法”，还希望逐步生成一个功能从开始到结束经过的完整代码路径，例如：
+CCE 不只记录“有哪些方法”，还会把静态分析事实组织成 typed graph，用于跨层查询和 Flow 遍历。例如：
 
 ```text
-Vue Page
-   ↓
-Frontend Function
-   ↓
+Vue / Miniprogram Page
+   ↓ page_api / import
 API Client
-   ↓
+   ↓ api_request
 HTTP Route
-   ↓
+   ↓ route_handler
 Backend Handler
-   ↓
+   ↓ call
 Service
-   ↓
+   ↓ call
 Repository
-   ↓
-Database Table
-   ↓
-Related Tests
+   ↓ db_read / db_write
+Database Object
+   ↕
+Related Tests / Alternate Clients
 ```
 
-第一阶段优先建立准确的 Symbol、Call、Route、Database 和 Test 关系。
+当前查询会先用中文别名、文件名、Symbol、Route、DB 对象等确定少量入口，再沿高置信 typed edge 做有界扩展。查询内部最多遍历 6 hops，只使用允许的静态证据，不会把 `unresolved` 关系当成确定事实继续传播。
 
-后续版本会进一步自动发现功能入口并生成跨层 Feature Flow。
+这意味着即使同一业务在管理端、后端和小程序中使用了不同命名，只要它们通过 Route、调用或共享数据对象存在可证明的结构关系，CCE 可以沿图把相关代码补回上下文。
+
+这仍然是静态分析，不等于运行时行为的绝对证明。反射、动态分派、配置驱动调用或无法静态确定的方法仍会保留为不确定边界。
 
 ## Feature Freshness
 
@@ -225,6 +225,21 @@ CCE 不使用大模型翻译开发任务。为了让中文需求能够检索英�
 
 别名只在执行 `query` 时读取，因此修改别名后不需要重新建立索引。
 
+## 跨层查询如何工作
+
+`context_query` 不再只是关键词排序。当前查询会使用这些 typed edge：
+
+- `page_api`：页面/视图 → 实际调用的导入 API；
+- `api_request`：客户端请求 → 服务端 Route；
+- `route_handler`：Route → Handler；
+- `call`：已解析的 Symbol 调用；
+- `db_read` / `db_write`：代码 → 数据库对象；
+- `test_of`：测试 → 生产代码。
+
+查询以少量高相关 seed 为起点，在严格的 hop、branch、node 上限内扩展，只走静态高置信边。
+
+如果任务同时明确写了“管理端”“小程序”等多个代码 surface，最终 Top-N 会为已经被图发现且匹配这些显式意图的文件保留少量名额，避免一个 surface 的高分结果把另一个 surface 全部挤掉。
+
 ## MCP
 
 CCE 同时提供一个面向本地索引的 MCP Server。
@@ -252,10 +267,23 @@ CCE 不会把整个仓库一次性返回给调用方，而是生成紧凑的 Con
 
 ```json
 {
-  "features": [],
+  "query_expansion": {
+    "graph_seed_nodes": [
+      "symbol:go:internal/task/service.go::*Service.UpdateManualTask"
+    ]
+  },
+  "graph_expansion": {
+    "added_files": 4,
+    "forward_steps": 8,
+    "reverse_steps": 6
+  },
+  "selection": {
+    "intent_reserved_files": []
+  },
   "must_read": [
     {
       "path": "internal/task/service.go",
+      "reasons": ["symbol_match"],
       "symbols": [
         "go:internal/task/service.go::*Service.UpdateManualTask"
       ]
@@ -324,7 +352,9 @@ Language analyzers
      ↓
 Symbol / Route / Data / Test facts
      ↓
-Dependency resolution
+Typed edge graph + dependency resolution
+     ↓
+Bounded query / flow traversal
      ↓
 Feature freshness propagation
      ↓
@@ -343,12 +373,11 @@ CLI / MCP / future IDE integrations
 
 1. 接入 TypeScript Compiler API；
 2. 接入 Vue `@vue/compiler-sfc`；
-3. 自动识别 Entry Point 和 Feature Flow；
-4. 为调用关系加入更明确的 evidence / confidence；
-5. 支持 SCIP 导出；
-6. 建立代码索引正确率与增量性能 Benchmark；
-7. 增加语言 Analyzer 插件机制；
-8. 后续可选支持语义排序 Provider，但不会成为核心引擎的必需依赖。
+3. 扩展 compiler-backed 的 call / import 精确解析能力；
+4. 支持 SCIP 导出；
+5. 建立 graph 正确率、检索质量和增量性能 Benchmark；
+6. 增加语言 Analyzer 插件机制；
+7. 后续可选支持语义排序 Provider，但不会成为核心引擎的必需依赖。
 
 ## 非目标
 
