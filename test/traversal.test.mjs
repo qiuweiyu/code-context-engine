@@ -286,3 +286,29 @@ test("traversal enforces hard hop bound", () => {
     db.close();
   }
 });
+
+
+test("global node limit keeps traversal compact", () => {
+  const db = graphDb();
+  try {
+    const start = "symbol:typescript:web/api/items.ts::getItem";
+    addEdge(db, {
+      edgeId: "node-limit",
+      from: start,
+      to: "symbol:go:backend/api.go::*API.Get",
+      type: "api_request",
+      sourceId: 41
+    });
+
+    const result = traverseGraph(db, {
+      startNodeIds: start,
+      nodeLimit: 1
+    });
+
+    assert.equal(result.visited_nodes.length, 1);
+    assert.equal(result.steps.length, 0);
+    assert.ok(result.frontier.some((item) => item.reason === "node_limit"));
+  } finally {
+    db.close();
+  }
+});
