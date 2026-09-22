@@ -111,6 +111,24 @@ test("query crosses shared data flow into a differently named client surface", a
         type: "db_read",
         sourceId: 0
       });
+      for (let i = 0; i < 8; i++) {
+        const noiseFile = `backend/noise/reader-${i}.go`;
+        const noiseSymbol = `go:backend/noise/reader-${i}.go::ReadNoise`;
+        insertFile(db, noiseFile, "go");
+        insertSymbol(db, {
+          id: noiseSymbol,
+          file: noiseFile,
+          language: "go",
+          name: "ReadNoise"
+        });
+        insertEdge(db, {
+          id: `db:noise-${i}`,
+          from: "symbol:" + noiseSymbol,
+          to: dbNode,
+          type: "db_read",
+          sourceId: 20 + i
+        });
+      }
       insertEdge(db, {
         id: "call:service-repo",
         from: "symbol:" + serviceSymbol,
@@ -173,7 +191,7 @@ test("query crosses shared data flow into a differently named client surface", a
         "db:table:public.manual_task_publications"
       )
     );
-    assert.ok(query.graph_expansion.reverse_steps >= 4);
+    assert.ok(query.graph_expansion.reverse_steps >= 12);
     assert.ok(query.graph_expansion.import_reverse_steps >= 1);
     assert.ok(query.graph_expansion.intent_boosted_files >= 2);
   } finally {
