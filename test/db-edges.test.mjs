@@ -70,7 +70,7 @@ test("database source facts become conservative typed graph edges", async () => 
     try {
       assert.deepEqual(
         db.prepare("SELECT DISTINCT parser_version AS v FROM files ORDER BY v").all().map((row) => row.v),
-        ["0.2.4"]
+        ["0.2.5"]
       );
 
       const dbObjects = db.prepare(
