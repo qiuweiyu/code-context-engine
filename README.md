@@ -172,6 +172,23 @@ Example:
 
 Aliases affect querying only; changing them does not require re-indexing.
 
+## Typed graph retrieval
+
+Task queries do more than lexical ranking. After deterministic alias/keyword matching finds a small set of entry points, CCE expands through a bounded typed graph built from static source evidence.
+
+Current edge types used by query/flow traversal include:
+
+- `page_api` — page/view to an imported API function that is actually called,
+- `api_request` — client request to a matching server route,
+- `route_handler` — server route to handler,
+- `call` — resolved symbol call,
+- `db_read` / `db_write` — symbol to database object,
+- `test_of` — test to production target.
+
+Query traversal uses static-confidence edges, is bounded to at most 6 hops, and does not traverse unresolved links. This lets a business task bridge layers such as page → API → route → handler → service → repository → database, and also walk reverse evidence back toward alternate clients or tests.
+
+If a task explicitly names multiple code surfaces such as an admin UI and a miniprogram, final selection reserves a small bounded number of slots for graph-discovered files that match those explicit path intents so one surface cannot crowd the other out.
+
 ## MCP
 
 CCE also exposes the local index as a read-oriented MCP server.
@@ -197,10 +214,21 @@ A task query returns a compact manifest instead of dumping the whole repository:
 
 ```json
 {
-  "features": [],
+  "query_expansion": {
+    "graph_seed_nodes": ["symbol:go:internal/task/service.go::*Service.UpdateManualTask"]
+  },
+  "graph_expansion": {
+    "added_files": 4,
+    "forward_steps": 8,
+    "reverse_steps": 6
+  },
+  "selection": {
+    "intent_reserved_files": []
+  },
   "must_read": [
     {
       "path": "internal/task/service.go",
+      "reasons": ["symbol_match"],
       "symbols": ["go:internal/task/service.go::*Service.UpdateManualTask"]
     }
   ],
@@ -250,7 +278,9 @@ Language analyzers
      ↓
 Symbol / Route / Data / Test facts
      ↓
-Dependency resolution
+Typed edge graph + dependency resolution
+     ↓
+Bounded query / flow traversal
      ↓
 Feature freshness propagation
      ↓
@@ -269,11 +299,10 @@ Near-term priorities:
 
 1. TypeScript Compiler API integration.
 2. Vue compiler-sfc integration.
-3. Automatic entry-point and feature-flow discovery.
-4. Better call graph confidence/evidence labels.
-5. SCIP export.
-6. Benchmark corpus for index correctness and incremental performance.
-7. Optional semantic providers as plugins — never required by the core engine.
+3. Broader compiler-backed call/import resolution.
+4. SCIP export.
+5. Benchmark corpus for graph correctness, retrieval quality and incremental performance.
+6. Optional semantic providers as plugins — never required by the core engine.
 
 ## Non-goals
 
