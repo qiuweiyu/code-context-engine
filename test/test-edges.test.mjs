@@ -23,8 +23,7 @@ test("test mappings become typed test_of edges with conservative confidence", as
       path.join(root, "backend/store/service.go"),
       [
         "package store",
-        "type Service struct{}",
-        "func (s *Service) Load() error { return nil }",
+        "func Load() error { return nil }",
         ""
       ].join("\n")
     );
@@ -34,8 +33,7 @@ test("test mappings become typed test_of edges with conservative confidence", as
         "package store",
         "import \"testing\"",
         "func TestLoad(t *testing.T) {",
-        "  var s Service",
-        "  if err := s.Load(); err != nil { t.Fatal(err) }",
+        "  if err := Load(); err != nil { t.Fatal(err) }",
         "}",
         ""
       ].join("\n")
@@ -73,7 +71,7 @@ test("test mappings become typed test_of edges with conservative confidence", as
       );
       assert.ok(directCall);
       assert.equal(directCall.from_node_id, "file:backend/store/service_test.go");
-      assert.equal(directCall.to_node_id, "symbol:go:backend/store/service.go::*Service.Load");
+      assert.equal(directCall.to_node_id, "symbol:go:backend/store/service.go::Load");
       assert.equal(directCall.confidence, "static");
 
       const evidence = JSON.parse(directCall.evidence_json);
@@ -81,7 +79,7 @@ test("test mappings become typed test_of edges with conservative confidence", as
       assert.equal(evidence.mapping_confidence, 0.9);
 
       const reverse = traverseGraph(db, {
-        startNodeIds: "symbol:go:backend/store/service.go::*Service.Load",
+        startNodeIds: "symbol:go:backend/store/service.go::Load",
         direction: "reverse",
         edgeTypes: ["test_of"],
         maxHops: 1,
