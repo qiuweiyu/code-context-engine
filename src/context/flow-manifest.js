@@ -193,6 +193,9 @@ export function buildFlowManifest(db, {
   if (starts.length === 0) {
     throw new Error("startNodeIds must contain at least one node");
   }
+  if (starts.length > 32) {
+    throw new Error("startNodeIds must contain at most 32 nodes");
+  }
 
   const flows = starts.map((startNodeId) => buildSingleFlow(db, startNodeId, {
     direction,
