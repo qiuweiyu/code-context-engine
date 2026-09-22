@@ -25,6 +25,11 @@ function migrateSchema(db, previousVersion) {
     if (!hasColumn(db, "routes", "handler_owner_type")) db.exec("ALTER TABLE routes ADD COLUMN handler_owner_type TEXT");
     rebuildRouteHandlerEdges(db);
   }
+  if (previousVersion < 7) {
+    if (!hasColumn(db, "dependencies", "metadata_json")) {
+      db.exec("ALTER TABLE dependencies ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'");
+    }
+  }
 }
 
 export function openStore(indexDir) {
