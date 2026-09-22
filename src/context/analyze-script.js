@@ -79,6 +79,76 @@ function extractCalls(body) {
   return out;
 }
 
+function parseImportBindings(clause) {
+  const value = String(clause ?? "").trim().replace(/^type\s+/, "");
+  const bindings = [];
+  if (!value) return bindings;
+
+  const named = value.match(/\{([\s\S]*?)\}/);
+  if (named) {
+    for (const rawPart of named[1].split(",")) {
+      const part = rawPart.trim().replace(/^type\s+/, "");
+      if (!part) continue;
+      const match = part.match(/^([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/);
+      if (!match) continue;
+      bindings.push({ kind: "named", imported: match[1], local: match[2] ?? match[1] });
+    }
+  }
+
+  const namespace = value.match(/\*\s+as\s+([A-Za-z_$][\w$]*)/);
+  if (namespace) bindings.push({ kind: "namespace", imported: "*", local: namespace[1] });
+
+  const withoutNamed = value.replace(/\{[\s\S]*?\}/, "").replace(/,?\s*\*\s+as\s+[A-Za-z_$][\w$]*/, "").trim();
+  const defaultMatch = withoutNamed.match(/^([A-Za-z_$][\w$]*)/);
+  if (defaultMatch) bindings.push({ kind: "default", imported: "default", local: defaultMatch[1] });
+
+  return bindings;
+}
+
+function extractImports(source, relPath, trackedSet) {
+  const out = [];
+  const seen = new Set();
+
+  const fromImport = /\bimport\s+([\s\S]*?)\s+from\s+["']([^"']+)["']/g;
+  for (const match of source.matchAll(fromImport)) {
+    const toRef = match[2];
+    const key = `from:${match.index}:${toRef}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      from_file: relPath,
+      from_symbol_id: null,
+      relation: "imports",
+      to_ref: toRef,
+      to_file: resolveRelativeImport(relPath, toRef, trackedSet),
+      resolved_symbol_id: null,
+      metadata: {
+        import_kind: "from",
+        import_bindings: parseImportBindings(match[1])
+      }
+    });
+  }
+
+  const sideEffectImport = /\bimport\s*["']([^"']+)["']/g;
+  for (const match of source.matchAll(sideEffectImport)) {
+    const toRef = match[1];
+    const key = `side:${match.index}:${toRef}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      from_file: relPath,
+      from_symbol_id: null,
+      relation: "imports",
+      to_ref: toRef,
+      to_file: resolveRelativeImport(relPath, toRef, trackedSet),
+      resolved_symbol_id: null,
+      metadata: { import_kind: "side_effect", import_bindings: [] }
+    });
+  }
+
+  return out;
+}
+
 export function analyzeScriptFile({ text, relPath, language, trackedSet }) {
   const vue = language === "vue" ? stripVue(text) : { script: text, offset: 0 };
   const source = vue.script;
@@ -86,10 +156,7 @@ export function analyzeScriptFile({ text, relPath, language, trackedSet }) {
   const dependencies = [];
   const moduleId = `${language}:${relPath}`;
 
-  for (const match of source.matchAll(/\bimport\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/g)) {
-    const toRef = match[1];
-    dependencies.push({ from_file: relPath, from_symbol_id: null, relation: "imports", to_ref: toRef, to_file: resolveRelativeImport(relPath, toRef, trackedSet), resolved_symbol_id: null });
-  }
+  dependencies.push(...extractImports(source, relPath, trackedSet));
 
   const declarations = [];
   const patterns = [
