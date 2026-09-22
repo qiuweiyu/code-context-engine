@@ -104,6 +104,10 @@ node .\src\cli.js query --repo "D:\Path\To\YourProject" --task "编辑未发布�
 
 建议先读取 `must_read`，上下文不足时再看 `maybe_read`。查询没有命中，不代表功能一定不存在。
 
+查询结果还会返回 `query_expansion.graph_seed_nodes`、`graph_expansion` 和 `selection.intent_reserved_files`。CCE 会从关键词/项目别名命中的少量入口出发，沿 `page_api`、`api_request`、`route_handler`、`call`、`db_read`、`db_write`、`test_of` 等静态 typed edge 做有界扩展。查询最多走 6 hops，不会沿 `unresolved` 关系继续传播。
+
+如果任务明确同时提到“管理端”“小程序”等多个 surface，最终 Top-N 会为图中已经发现、且匹配这些显式 path intent 的文件保留少量名额，避免某一个 surface 的高分结果把另一个 surface 全部挤掉。
+
 
 ## 项目业务词别名
 
@@ -132,7 +136,7 @@ node .\src\cli.js query --repo "D:\Path\To\YourProject" --task "编辑未发布�
 node .\src\cli.js index --repo "D:\Path\To\YourProject"
 ```
 
-CCE 会比较内容 hash：未变化文件直接 `skipped`，只重新分析变化文件。
+CCE 会比较内容 hash：未变化文件直接 `skipped`，只重新分析变化文件。派生 typed edge 会在 index 过程中基于当前事实重新生成，因此如果升级的 CCE 只修改了 edge 构建逻辑，即使 `changed_files = 0` 也应正常再执行一次 `index`；只要 Parser/Schema 没要求全量刷新，就不需要 `--force`。
 
 推荐日常流程：
 
@@ -165,6 +169,8 @@ node .\src\cli.js index --repo "D:\Path\To\YourProject"
 ## SQLite ExperimentalWarning
 
 Node.js 22 可能显示 `ExperimentalWarning: SQLite is an experimental feature`。CCE 当前使用内置 `node:sqlite`。这个提示本身不代表失败，应以最终 JSON 的 `ok: true`、`npm test` 和 CI 结果为准。
+
+如果需要在 Windows PowerShell 5.1 中把含中文的 JSON stdout 保存到文件，要注意 `>` 重定向可能改变编码。日常验收建议直接查看终端输出，或使用能够保留 UTF-8 的重定向方式。
 
 ## Linux / macOS
 
