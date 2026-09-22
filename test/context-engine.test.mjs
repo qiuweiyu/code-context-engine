@@ -614,7 +614,7 @@ test("frontend requests resolve to backend routes through method and normalized 
       const parserVersions = db.prepare(
         "SELECT DISTINCT parser_version FROM files ORDER BY parser_version"
       ).all().map((row) => row.parser_version);
-      assert.deepEqual(parserVersions, ["0.2.4"]);
+      assert.deepEqual(parserVersions, ["0.2.5"]);
 
       const getClient = db.prepare(
         "SELECT * FROM routes WHERE direction='client' AND symbol_id LIKE '%::getItem'"
