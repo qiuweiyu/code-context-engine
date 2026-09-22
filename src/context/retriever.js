@@ -179,15 +179,16 @@ function symbolSeedsFromEntries(entries, limit) {
   return out;
 }
 
-function buildGraphSeeds(files, matchedRouteNodes, nonTestFiles) {
+function buildGraphSeeds(files, matchedRouteNodes, matchedDbNodes, nonTestFiles) {
   const overall = [...files.values()]
     .filter((entry) => nonTestFiles.has(entry.path))
     .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
 
   const nodes = [
-    ...symbolSeedsFromEntries(channelEntries(files, "symbol"), 4),
+    ...symbolSeedsFromEntries(channelEntries(files, "symbol"), 3),
     ...matchedRouteNodes.slice(0, 2),
-    ...symbolSeedsFromEntries(channelEntries(files, "db"), 4),
+    ...[...new Set(matchedDbNodes)].slice(0, 3),
+    ...symbolSeedsFromEntries(channelEntries(files, "db"), 2),
     ...overall.slice(0, 2).map((entry) => `file:${entry.path}`)
   ];
   return [...new Set(nodes)].slice(0, 12);
@@ -307,6 +308,7 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
         matchedRouteNodes.push(`route:${route.direction}:${route.method}:${route.route_path}`);
       }
     }
+    const matchedDbNodes = [];
     const dbObjects = db.prepare("SELECT * FROM db_objects").all();
     for (const obj of dbObjects) {
       const dbText = `${obj.object_name} ${obj.operation}`;
@@ -314,6 +316,7 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       const score = textScore(dbText, terms, 8) + projectScore;
       if (score > 0 && (projectTerms.length === 0 || projectScore > 0)) {
         addFile(files, obj.file_path, score, `db:${obj.object_name}`, obj.symbol_id, "db");
+        matchedDbNodes.push(`db:${obj.object_type}:${obj.object_name}`);
       }
     }
 
@@ -329,7 +332,7 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
     const nonTestFiles = new Set(
       db.prepare("SELECT path FROM files WHERE is_test=0").all().map((row) => row.path)
     );
-    const graphSeeds = buildGraphSeeds(files, matchedRouteNodes, nonTestFiles);
+    const graphSeeds = buildGraphSeeds(files, matchedRouteNodes, matchedDbNodes, nonTestFiles);
     const graphExpansion = expandFromGraph(db, files, graphSeeds);
 
     const importCandidates = graphExpansion.added_file_paths
