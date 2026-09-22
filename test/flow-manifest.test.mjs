@@ -287,3 +287,21 @@ test("multiple entry points are normalized into deterministic flow order", () =>
     db.close();
   }
 });
+
+
+test("flow manifest enforces a global entry-point bound", () => {
+  const db = makeDb();
+  try {
+    const starts = Array.from(
+      { length: 33 },
+      (_, index) => `symbol:typescript:web/api/items.ts::entry${index}`
+    );
+
+    assert.throws(
+      () => buildFlowManifest(db, { startNodeIds: starts }),
+      /startNodeIds must contain at most 32 nodes/
+    );
+  } finally {
+    db.close();
+  }
+});
