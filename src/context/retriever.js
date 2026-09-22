@@ -87,6 +87,8 @@ const QUERY_GRAPH_REVERSE_TYPES = Object.freeze([
   "api_request",
   "route_handler",
   "call",
+  "db_read",
+  "db_write",
   "test_of"
 ]);
 
@@ -110,9 +112,9 @@ function expandFromGraph(db, files, seedNodes) {
       const traversal = traverseGraph(db, {
         startNodeIds: seed,
         direction,
-        maxHops: direction === "forward" ? 4 : 2,
-        branchLimit: 8,
-        nodeLimit: 64,
+        maxHops: 6,
+        branchLimit: 6,
+        nodeLimit: 96,
         minConfidence: "static",
         edgeTypes
       });
@@ -146,12 +148,101 @@ function expandFromGraph(db, files, seedNodes) {
     }
   }
 
+  const addedFilePaths = [...files.keys()].filter((file) => !before.has(file));
   return {
     seed_nodes: visitedSeeds,
-    added_files: [...files.keys()].filter((file) => !before.has(file)).length,
+    added_files: addedFilePaths.length,
+    added_file_paths: addedFilePaths,
     forward_steps: forwardSteps,
     reverse_steps: reverseSteps
   };
+}
+
+function channelEntries(files, channel) {
+  return [...files.values()]
+    .filter((entry) => Number(entry.channel_scores?.[channel] ?? 0) > 0)
+    .sort((a, b) =>
+      Number(b.channel_scores[channel]) - Number(a.channel_scores[channel])
+      || b.score - a.score
+      || a.path.localeCompare(b.path)
+    );
+}
+
+function symbolSeedsFromEntries(entries, limit) {
+  const out = [];
+  for (const entry of entries) {
+    for (const symbolId of [...entry.symbols].sort()) {
+      out.push(`symbol:${symbolId}`);
+      if (out.length >= limit) return out;
+    }
+  }
+  return out;
+}
+
+function buildGraphSeeds(files, matchedRouteNodes, nonTestFiles) {
+  const overall = [...files.values()]
+    .filter((entry) => nonTestFiles.has(entry.path))
+    .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
+
+  const nodes = [
+    ...symbolSeedsFromEntries(channelEntries(files, "symbol"), 4),
+    ...matchedRouteNodes.slice(0, 2),
+    ...symbolSeedsFromEntries(channelEntries(files, "db"), 4),
+    ...overall.slice(0, 2).map((entry) => `file:${entry.path}`)
+  ];
+  return [...new Set(nodes)].slice(0, 12);
+}
+
+function expandReverseImports(db, files, filePaths, nonTestFiles) {
+  const before = new Set(files.keys());
+  let steps = 0;
+  const seeds = [...new Set(filePaths)]
+    .filter((file) => nonTestFiles.has(file))
+    .slice(0, 8);
+
+  for (const file of seeds) {
+    const seed = `file:${file}`;
+    const traversal = traverseGraph(db, {
+      startNodeIds: seed,
+      direction: "reverse",
+      maxHops: 1,
+      branchLimit: 8,
+      nodeLimit: 32,
+      minConfidence: "static",
+      edgeTypes: ["import"]
+    });
+    steps += traversal.steps.length;
+
+    for (const node of traversal.visited_nodes) {
+      if (!node.file_path || node.node_id === seed || !nonTestFiles.has(node.file_path)) continue;
+      addFile(
+        files,
+        node.file_path,
+        6,
+        "graph_reverse:import",
+        node.symbol_id ?? null,
+        "typed_graph"
+      );
+    }
+  }
+
+  return {
+    seed_files: seeds,
+    steps,
+    added_files: [...files.keys()].filter((file) => !before.has(file)).length
+  };
+}
+
+function applyIntentPathBoost(files, builtinTerms) {
+  if (builtinTerms.length === 0) return 0;
+  let boosted = 0;
+  for (const entry of [...files.values()]) {
+    const score = Math.min(16, textScore(entry.path, builtinTerms, 8));
+    if (score <= 0) continue;
+    addFile(files, entry.path, score, "intent_path_match", null, "intent");
+    boosted++;
+  }
+  return boosted;
 }
 
 export function queryContext({ repoRoot, task, indexDir = ".context-index", maxFiles = 12 }) {
@@ -161,6 +252,7 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
     const expansion = expandQuery(task, loadProjectAliases(repoRoot));
     const terms = expansion.terms;
     const projectTerms = aliasTermsFromExpansion(expansion, "project");
+    const builtinTerms = aliasTermsFromExpansion(expansion, "builtin");
     const files = new Map();
     const featureCandidates = [];
     const features = db.prepare("SELECT * FROM features").all();
@@ -237,18 +329,25 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
     const nonTestFiles = new Set(
       db.prepare("SELECT path FROM files WHERE is_test=0").all().map((row) => row.path)
     );
-    const fileSeeds = [...files.values()]
-      .filter((entry) => nonTestFiles.has(entry.path))
-      .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path))
-      .slice(0, 8)
-      .map((entry) => `file:${entry.path}`);
-    const symbolSeeds = [...seedSymbols].slice(0, 8).map((symbolId) => `symbol:${symbolId}`);
-    const graphSeeds = [...new Set([
-      ...symbolSeeds,
-      ...matchedRouteNodes.slice(0, 4),
-      ...fileSeeds
-    ])].slice(0, 12);
+    const graphSeeds = buildGraphSeeds(files, matchedRouteNodes, nonTestFiles);
     const graphExpansion = expandFromGraph(db, files, graphSeeds);
+
+    const importCandidates = graphExpansion.added_file_paths
+      .map((file) => files.get(file))
+      .filter(Boolean)
+      .sort((a, b) =>
+        textScore(b.path, builtinTerms, 1) - textScore(a.path, builtinTerms, 1)
+        || b.score - a.score
+        || a.path.localeCompare(b.path)
+      )
+      .map((entry) => entry.path);
+    const importExpansion = expandReverseImports(
+      db,
+      files,
+      importCandidates,
+      nonTestFiles
+    );
+    const intentBoostedFiles = applyIntentPathBoost(files, builtinTerms);
 
     for (const symbolId of [...seedSymbols].slice(0, 30)) {
       const edges = db.prepare(`SELECT d.*,s.file_path AS target_file FROM dependencies d LEFT JOIN symbols s ON s.symbol_id=d.resolved_symbol_id WHERE d.from_symbol_id=? OR d.resolved_symbol_id=?`).all(symbolId,symbolId);
@@ -309,9 +408,12 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
         graph_seed_nodes: graphExpansion.seed_nodes
       },
       graph_expansion: {
-        added_files: graphExpansion.added_files,
+        added_files: graphExpansion.added_files + importExpansion.added_files,
         forward_steps: graphExpansion.forward_steps,
-        reverse_steps: graphExpansion.reverse_steps
+        reverse_steps: graphExpansion.reverse_steps,
+        import_reverse_steps: importExpansion.steps,
+        import_seed_files: importExpansion.seed_files,
+        intent_boosted_files: intentBoostedFiles
       },
       features: relevantFeatures,
       must_read: mustRead.map((x)=>({path:x.path,score:Number(x.score.toFixed(2)),reasons:x.reasons,symbols:x.symbols})),
