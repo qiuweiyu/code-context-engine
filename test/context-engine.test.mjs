@@ -594,7 +594,10 @@ test("frontend requests resolve to backend routes through method and normalized 
         "export async function createItem() {",
         "  return requestJson('/api/items', { method: 'POST', body: {} })",
         "}",
-        "export async function unknownMethod() {",
+        "export async function uniqueUnknownMethod(studentID: string) {",
+        "  return request(`/api/assignments/${studentID}`)",
+        "}",
+        "export async function ambiguousUnknownMethod() {",
         "  return requestJson('/api/items')",
         "}"
       ].join("\n") + "\n"
@@ -644,16 +647,36 @@ test("frontend requests resolve to backend routes through method and normalized 
       assert.equal(JSON.parse(createEdge.evidence_json).resolution, "method_exact_path");
       assert.equal(createEdge.to_node_id, "route:server:POST:/api/items");
 
-      const unknownClient = db.prepare(
-        "SELECT * FROM routes WHERE direction='client' AND symbol_id LIKE '%::unknownMethod'"
+      const uniqueUnknownClient = db.prepare(
+        "SELECT * FROM routes WHERE direction='client' AND symbol_id LIKE '%::uniqueUnknownMethod'"
       ).get();
-      assert.equal(unknownClient.method, "ANY");
+      assert.equal(uniqueUnknownClient.method, "ANY");
+      assert.equal(uniqueUnknownClient.route_path, "/api/assignments/{param}");
 
-      const unknownEdge = db.prepare(
+      const uniqueUnknownEdge = db.prepare(
         "SELECT * FROM edges WHERE source_kind='client_route' AND source_id=?"
-      ).get(unknownClient.id);
-      assert.equal(unknownEdge.confidence, "unresolved");
-      assert.equal(JSON.parse(unknownEdge.evidence_json).resolution, "method_unresolved");
+      ).get(uniqueUnknownClient.id);
+      assert.equal(uniqueUnknownEdge.confidence, "static");
+      assert.equal(uniqueUnknownEdge.from_node_id, "symbol:typescript:web/api/items.ts::uniqueUnknownMethod");
+      assert.equal(uniqueUnknownEdge.to_node_id, "route:server:GET:/api/assignments/{student_id}");
+      assert.equal(
+        JSON.parse(uniqueUnknownEdge.evidence_json).resolution,
+        "unique_path_shape_method_unknown"
+      );
+
+      const ambiguousUnknownClient = db.prepare(
+        "SELECT * FROM routes WHERE direction='client' AND symbol_id LIKE '%::ambiguousUnknownMethod'"
+      ).get();
+      assert.equal(ambiguousUnknownClient.method, "ANY");
+
+      const ambiguousUnknownEdge = db.prepare(
+        "SELECT * FROM edges WHERE source_kind='client_route' AND source_id=?"
+      ).get(ambiguousUnknownClient.id);
+      assert.equal(ambiguousUnknownEdge.confidence, "unresolved");
+      assert.equal(
+        JSON.parse(ambiguousUnknownEdge.evidence_json).resolution,
+        "method_unresolved_route_not_unique"
+      );
     } finally {
       db.close();
     }
