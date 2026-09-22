@@ -6,6 +6,7 @@ import { assertAllowedPath } from "./security.js";
 import { indexRepository } from "./context/indexer.js";
 import { queryContext } from "./context/retriever.js";
 import { readIndexStatus } from "./context/status.js";
+import { buildRepositoryFlowManifest } from "./context/flow-manifest.js";
 
 const server = new McpServer({ name: "code-context-engine", version: "0.1.6" });
 const textResult = (value) => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
@@ -47,6 +48,60 @@ server.registerTool(
     try {
       const allowed = assertAllowedPath(repo_root);
       return textResult(queryContext({ repoRoot: allowed, task, maxFiles: max_files ?? 12 }));
+    } catch (error) {
+      return textResult({ ok: false, error: error instanceof Error ? error.message : "unknown error" });
+    }
+  }
+);
+
+server.registerTool(
+  "context_flow",
+  {
+    title: "Build a compact deterministic flow manifest",
+    description:
+      "Traverses the local typed code graph from one or more explicit entry nodes and returns compact cross-layer flows with bounded depth/width, evidence, frontier, unresolved links, and involved files. No source is uploaded and no model is called.",
+    inputSchema: {
+      repo_root: z.string().min(1),
+      start_nodes: z.array(z.string().min(1)).min(1).max(32),
+      direction: z.enum(["forward", "reverse"]).optional(),
+      max_hops: z.number().int().min(1).max(4).optional(),
+      branch_limit: z.number().int().min(1).max(100).optional(),
+      node_limit: z.number().int().min(1).max(1000).optional(),
+      min_confidence: z.enum(["exact", "static", "inferred"]).optional(),
+      edge_types: z.array(z.enum([
+        "call",
+        "import",
+        "route_handler",
+        "api_request",
+        "db_read",
+        "db_write",
+        "test_of",
+        "page_api"
+      ])).min(1).optional()
+    }
+  },
+  async ({
+    repo_root,
+    start_nodes,
+    direction,
+    max_hops,
+    branch_limit,
+    node_limit,
+    min_confidence,
+    edge_types
+  }) => {
+    try {
+      const allowed = assertAllowedPath(repo_root);
+      return textResult(buildRepositoryFlowManifest({
+        repoRoot: allowed,
+        startNodeIds: start_nodes,
+        direction: direction ?? "forward",
+        maxHops: max_hops ?? 3,
+        branchLimit: branch_limit ?? 8,
+        nodeLimit: node_limit ?? 128,
+        minConfidence: min_confidence ?? "static",
+        edgeTypes: edge_types ?? null
+      }));
     } catch (error) {
       return textResult({ ok: false, error: error instanceof Error ? error.message : "unknown error" });
     }
