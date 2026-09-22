@@ -246,8 +246,16 @@ test("query crosses shared data flow into a differently named client surface", a
     assert.ok(query.graph_expansion.reverse_steps >= 12);
     assert.ok(query.graph_expansion.import_reverse_steps >= 1);
     assert.ok(query.graph_expansion.intent_boosted_files >= 2);
-    assert.ok(query.selection.intent_reserved_files.includes(clientFile));
-    assert.ok(query.selection.intent_reserved_files.includes(pageFile));
+    assert.ok(
+      query.selection.intent_reserved_files.includes(
+        "miniprogram/services/student-assignments.ts"
+      )
+    );
+    assert.ok(
+      query.selection.intent_reserved_files.includes(
+        "miniprogram/pages/student/index.ts"
+      )
+    );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
