@@ -88,6 +88,19 @@ test("query crosses shared data flow into a differently named client surface", a
         name: "getAssignments"
       });
 
+      for (let i = 0; i < 16; i++) {
+        const crowdedFile = `admin-web/src/manualtask/high-priority-${i}.ts`;
+        const crowdedSymbol = `typescript:admin-web/src/manualtask/high-priority-${i}.ts::manualtaskList${i}`;
+        insertFile(db, crowdedFile);
+        insertSymbol(db, {
+          id: crowdedSymbol,
+          file: crowdedFile,
+          language: "typescript",
+          name: `manualtaskList${i}`,
+          qualified: `manualtaskList${i}`
+        });
+      }
+
       for (let i = 0; i < 6; i++) {
         const decoyFile = `backend/manualtask/decoy-${i}.go`;
         const decoySymbol = `go:backend/manualtask/decoy-${i}.go::ReadDraft`;
@@ -233,6 +246,8 @@ test("query crosses shared data flow into a differently named client surface", a
     assert.ok(query.graph_expansion.reverse_steps >= 12);
     assert.ok(query.graph_expansion.import_reverse_steps >= 1);
     assert.ok(query.graph_expansion.intent_boosted_files >= 2);
+    assert.ok(query.selection.intent_reserved_files.includes(clientFile));
+    assert.ok(query.selection.intent_reserved_files.includes(pageFile));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
