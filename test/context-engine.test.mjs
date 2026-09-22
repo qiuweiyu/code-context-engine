@@ -344,7 +344,7 @@ test("schema migration backfills dependency typed edges without reindexing", asy
   const dbPath = path.join(indexDir, "index.sqlite");
   try {
     const first = await indexRepository({ repoRoot: root });
-    assert.equal(first.manifest.schema_version, 7);
+    assert.equal(first.manifest.schema_version, 8);
     assert.ok(first.manifest.counts.edges > 0);
 
     const edgeLines = (await fs.readFile(path.join(indexDir, "edges.jsonl"), "utf8"))
@@ -369,7 +369,7 @@ test("schema migration backfills dependency typed edges without reindexing", asy
     try {
       assert.equal(
         migrated.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get().value,
-        "7"
+        "8"
       );
       assert.equal(
         migrated.db.prepare("SELECT COUNT(*) AS n FROM edges WHERE source_kind='dependency'").get().n,
@@ -378,6 +378,9 @@ test("schema migration backfills dependency typed edges without reindexing", asy
       assert.equal(
         migrated.db.prepare("SELECT value FROM meta WHERE key='last_indexed_at'").get().value,
         indexedAt
+      );
+      assert.ok(
+        migrated.db.prepare("PRAGMA table_info(files)").all().some((column) => column.name === "package_name")
       );
 
       const resolvedCall = migrated.db.prepare(
@@ -437,7 +440,7 @@ test("HTTP route registrations resolve typed route_handler edges by receiver par
     await git(root, "commit", "-qm", "init");
 
     const result = await indexRepository({ repoRoot: root });
-    assert.equal(result.manifest.schema_version, 7);
+    assert.equal(result.manifest.schema_version, 8);
 
     const db = new DatabaseSync(path.join(root, ".context-index/index.sqlite"));
     try {
@@ -544,7 +547,7 @@ test("schema v6 adds route handler owner metadata without changing indexed_at", 
       assert.ok(columns.includes("handler_owner_type"));
       assert.equal(
         migrated.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get().value,
-        "7"
+        "8"
       );
       assert.equal(
         migrated.db.prepare("SELECT value FROM meta WHERE key='last_indexed_at'").get().value,
@@ -604,14 +607,14 @@ test("frontend requests resolve to backend routes through method and normalized 
     await git(root, "commit", "-qm", "init");
 
     const result = await indexRepository({ repoRoot: root });
-    assert.equal(result.manifest.schema_version, 7);
+    assert.equal(result.manifest.schema_version, 8);
 
     const db = new DatabaseSync(path.join(root, ".context-index/index.sqlite"));
     try {
       const parserVersions = db.prepare(
         "SELECT DISTINCT parser_version FROM files ORDER BY parser_version"
       ).all().map((row) => row.parser_version);
-      assert.deepEqual(parserVersions, ["0.2.3"]);
+      assert.deepEqual(parserVersions, ["0.2.4"]);
 
       const getClient = db.prepare(
         "SELECT * FROM routes WHERE direction='client' AND symbol_id LIKE '%::getItem'"
