@@ -223,6 +223,131 @@ export function rebuildTestEdges(db) {
   }
 }
 
+function pageLikeFile(filePath) {
+  const normalized = String(filePath ?? "").replaceAll("\\", "/");
+  return /(^|\/)(views?|pages?)(\/|$)/i.test(normalized)
+    || /(?:View|Page)\.vue$/i.test(normalized);
+}
+
+function apiModuleFile(filePath) {
+  return /(^|\/)api(\/|$)/i.test(String(filePath ?? "").replaceAll("\\", "/"));
+}
+
+function parseMetadata(value) {
+  try {
+    return value ? JSON.parse(value) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function rebuildPageApiEdges(db) {
+  db.prepare("DELETE FROM edges WHERE source_kind='page_api'").run();
+
+  const pageFiles = db.prepare(
+    "SELECT path FROM files WHERE is_test=0 AND language='vue' ORDER BY path"
+  ).all().map((row) => row.path).filter(pageLikeFile);
+
+  const symbolsByFile = new Map();
+  for (const symbol of db.prepare(
+    "SELECT symbol_id,file_path,name FROM symbols ORDER BY file_path,name,symbol_id"
+  ).all()) {
+    if (!symbolsByFile.has(symbol.file_path)) symbolsByFile.set(symbol.file_path, []);
+    symbolsByFile.get(symbol.file_path).push(symbol);
+  }
+
+  const insert = db.prepare(`INSERT INTO edges(edge_id,from_node_id,to_node_id,type,confidence,evidence_json,source_kind,source_id)
+    VALUES(?,?,?,?,?,?,?,?)`);
+
+  for (const pageFile of pageFiles) {
+    const imports = db.prepare(
+      "SELECT id,to_ref,to_file,metadata_json FROM dependencies WHERE from_file=? AND relation='imports' ORDER BY id"
+    ).all(pageFile);
+
+    const bindingIndex = new Map();
+    for (const dep of imports) {
+      if (!dep.to_file || !apiModuleFile(dep.to_file)) continue;
+      const metadata = parseMetadata(dep.metadata_json);
+      const bindings = Array.isArray(metadata.import_bindings) ? metadata.import_bindings : [];
+      for (const binding of bindings) {
+        const local = String(binding?.local ?? "");
+        if (!local) continue;
+        if (!bindingIndex.has(local)) bindingIndex.set(local, []);
+        bindingIndex.get(local).push({
+          import_id: dep.id,
+          module_ref: dep.to_ref,
+          module_file: dep.to_file,
+          kind: binding.kind,
+          imported: binding.imported,
+          local
+        });
+      }
+    }
+
+    if (bindingIndex.size === 0) continue;
+
+    const calls = db.prepare(
+      "SELECT id,from_symbol_id,to_ref FROM dependencies WHERE from_file=? AND relation='calls' ORDER BY id"
+    ).all(pageFile);
+
+    for (const call of calls) {
+      const raw = String(call.to_ref ?? "");
+      const parts = raw.split(".");
+      const root = parts[0];
+      let bindings = [];
+      let importedName = null;
+
+      if (parts.length === 1) {
+        bindings = (bindingIndex.get(root) ?? []).filter((binding) => binding.kind === "named");
+        if (bindings.length === 1) importedName = bindings[0].imported;
+      } else {
+        bindings = (bindingIndex.get(root) ?? []).filter((binding) => binding.kind === "namespace");
+        if (bindings.length === 1) importedName = parts.at(-1);
+      }
+
+      if (bindings.length !== 1 || !importedName) continue;
+      const binding = bindings[0];
+      const candidates = (symbolsByFile.get(binding.module_file) ?? [])
+        .filter((symbol) => symbol.name === importedName);
+
+      const resolved = candidates.length === 1 ? candidates[0] : null;
+      const toNode = resolved
+        ? nodeId("symbol", resolved.symbol_id)
+        : nodeId("ref", `page_api:${binding.module_ref}:${importedName}`);
+      const resolution = resolved
+        ? "import_binding_symbol"
+        : (candidates.length > 1 ? "import_binding_target_ambiguous" : "import_binding_target_missing");
+      const confidence = resolved ? "static" : "unresolved";
+
+      insert.run(
+        `page_api:${call.id}`,
+        nodeId("file", pageFile),
+        toNode,
+        "page_api",
+        confidence,
+        JSON.stringify({
+          type: resolved ? "static_resolution" : "unresolved_reference",
+          source: "dependencies",
+          source_id: call.id,
+          page_file: pageFile,
+          caller_symbol_id: call.from_symbol_id ?? null,
+          call_ref: raw,
+          import_source_id: binding.import_id,
+          module_ref: binding.module_ref,
+          module_file: binding.module_file,
+          binding_kind: binding.kind,
+          local_binding: binding.local,
+          imported_name: importedName,
+          candidate_count: candidates.length,
+          resolution
+        }),
+        "page_api",
+        call.id
+      );
+    }
+  }
+}
+
 export function listTypedEdges(db) {
   return db.prepare("SELECT * FROM edges ORDER BY edge_id").all().map((row) => ({
     ...row,
