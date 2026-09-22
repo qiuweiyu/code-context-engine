@@ -113,7 +113,7 @@ function expandFromGraph(db, files, seedNodes) {
         startNodeIds: seed,
         direction,
         maxHops: 6,
-        branchLimit: 6,
+        branchLimit: 12,
         nodeLimit: 96,
         minConfidence: "static",
         edgeTypes
