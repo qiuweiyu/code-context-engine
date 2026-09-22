@@ -21,6 +21,9 @@ const DEPENDENCY_EDGE_TYPES = new Map([
   ["imports", "import"]
 ]);
 
+const DB_READ_OPERATIONS = new Set(["select", "join"]);
+const DB_WRITE_OPERATIONS = new Set(["insert", "update", "delete", "create", "alter"]);
+
 function nodeId(kind, value) {
   return `${kind}:${String(value)}`;
 }
@@ -90,6 +93,63 @@ export function rebuildDependencyEdges(db) {
 
   for (const dep of deps) {
     const edge = dependencyToTypedEdge(dep);
+    if (!edge) continue;
+    insert.run(
+      edge.edge_id,
+      edge.from_node_id,
+      edge.to_node_id,
+      edge.type,
+      edge.confidence,
+      JSON.stringify(edge.evidence),
+      edge.source_kind,
+      edge.source_id
+    );
+  }
+}
+
+
+export function dbObjectToTypedEdge(obj) {
+  const operation = String(obj.operation ?? "").toLowerCase();
+  const type = DB_READ_OPERATIONS.has(operation)
+    ? "db_read"
+    : (DB_WRITE_OPERATIONS.has(operation) ? "db_write" : null);
+  if (!type) return null;
+
+  const fromNodeId = obj.symbol_id
+    ? nodeId("symbol", obj.symbol_id)
+    : nodeId("file", obj.file_path);
+  const toNodeId = `db:${obj.object_type}:${obj.object_name}`;
+
+  return {
+    edge_id: `db_object:${obj.id}`,
+    from_node_id: fromNodeId,
+    to_node_id: toNodeId,
+    type,
+    confidence: "static",
+    evidence: {
+      type: "static_resolution",
+      source: "db_objects",
+      source_id: obj.id,
+      file: obj.file_path,
+      line: obj.line,
+      object_type: obj.object_type,
+      object_name: obj.object_name,
+      operation,
+      resolution: "sql_object_operation"
+    },
+    source_kind: "db_object",
+    source_id: obj.id
+  };
+}
+
+export function rebuildDbObjectEdges(db) {
+  db.prepare("DELETE FROM edges WHERE source_kind='db_object'").run();
+  const objects = db.prepare("SELECT * FROM db_objects ORDER BY id").all();
+  const insert = db.prepare(`INSERT INTO edges(edge_id,from_node_id,to_node_id,type,confidence,evidence_json,source_kind,source_id)
+    VALUES(?,?,?,?,?,?,?,?)`);
+
+  for (const obj of objects) {
+    const edge = dbObjectToTypedEdge(obj);
     if (!edge) continue;
     insert.run(
       edge.edge_id,

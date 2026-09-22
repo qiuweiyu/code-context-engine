@@ -164,6 +164,18 @@ function describeNode(db, nodeId) {
       : { node_id: nodeId, kind: "route", ...parsed };
   }
 
+  if (nodeId.startsWith("db:")) {
+    const rest = nodeId.slice("db:".length);
+    const separator = rest.indexOf(":");
+    if (separator < 0) return { node_id: nodeId, kind: "db_object" };
+    return {
+      node_id: nodeId,
+      kind: "db_object",
+      object_type: rest.slice(0, separator),
+      object_name: rest.slice(separator + 1)
+    };
+  }
+
   if (nodeId.startsWith("ref:")) {
     return {
       node_id: nodeId,
