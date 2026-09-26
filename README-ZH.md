@@ -52,7 +52,7 @@ Human / IDE / Coding Agent
 
 ## 当前状态
 
-`v0.1.6` 是早期开源基线。
+`v0.1.7` 是早期开源基线。
 
 当前已包含：
 
@@ -194,6 +194,17 @@ node src/cli.js query \
   --task "编辑未发布的人工任务"
 ```
 
+给 ChatGPT、Codex 或其他 Coding Agent 使用时，可以请求 Compact 视图：
+
+```bash
+node src/cli.js query \
+  --repo /path/to/project \
+  --task "编辑未发布的人工任务" \
+  --compact
+```
+
+不加 `--compact` 时，原有 Full 调试输出保持不变。
+
 查看索引和 Feature 新鲜度：
 
 ```bash
@@ -250,7 +261,7 @@ CCE 同时提供一个面向本地索引的 MCP Server。
 - `context_query`
 - `context_index_status`
 
-MCP Server 本身不依赖模型，只允许访问 `CCE_ALLOWED_ROOTS` 指定目录下的仓库。
+MCP Server 本身不依赖模型，只允许访问 `CCE_ALLOWED_ROOTS` 指定目录下的仓库。`context_query` 支持可选的 `compact: true`，并与 CLI 复用同一套 Compact projection。
 
 例如：
 
@@ -263,7 +274,9 @@ node src/server.js
 
 ## 查询结果
 
-CCE 不会把整个仓库一次性返回给调用方，而是生成紧凑的 Context Manifest：
+Query 现在有两种输出视图。默认 Full 视图保留 retrieval / graph 诊断，便于人工调试和引擎检查；`--compact`（或 MCP `compact: true`）只对同一份查询结果做 LLM 友好的投影，保留 coverage、待读文件、有限 symbol hints 和 tests。Compact 不会切换到另一套检索逻辑。
+
+默认 Full 视图包含如下诊断信息：
 
 ```json
 {

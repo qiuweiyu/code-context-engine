@@ -7,9 +7,13 @@ import { indexRepository } from "./context/indexer.js";
 import { queryContext } from "./context/retriever.js";
 import { readIndexStatus } from "./context/status.js";
 import { buildRepositoryFlowManifest } from "./context/flow-manifest.js";
+import { serializeQueryOutput } from "./context/query-output.js";
 
-const server = new McpServer({ name: "code-context-engine", version: "0.1.6" });
+const server = new McpServer({ name: "code-context-engine", version: "0.1.7" });
 const textResult = (value) => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
+const queryTextResult = (value, compact = false) => ({
+  content: [{ type: "text", text: serializeQueryOutput(value, { compact }) }]
+});
 
 server.registerTool(
   "context_index_repo",
@@ -35,21 +39,28 @@ server.registerTool(
 server.registerTool(
   "context_query",
   {
-    title: "Build a compact code context manifest",
+    title: "Query local code context",
     description:
-      "Queries the local code knowledge index and returns matching feature flows, symbols, files, one-hop dependencies, and tests. No source is uploaded and no model is called.",
+      "Queries the local code knowledge index. Set compact=true for an LLM-oriented projection with selected files, symbol hints, tests, and coverage while preserving the full debug view by default. No source is uploaded and no model is called.",
     inputSchema: {
       repo_root: z.string().min(1),
       task: z.string().min(3),
-      max_files: z.number().int().min(1).max(50).optional()
+      max_files: z.number().int().min(1).max(50).optional(),
+      compact: z.boolean().optional().describe("Return the compact LLM-oriented query projection.")
     }
   },
-  async ({ repo_root, task, max_files }) => {
+  async ({ repo_root, task, max_files, compact }) => {
     try {
       const allowed = assertAllowedPath(repo_root);
-      return textResult(queryContext({ repoRoot: allowed, task, maxFiles: max_files ?? 12 }));
+      return queryTextResult(
+        queryContext({ repoRoot: allowed, task, maxFiles: max_files ?? 12 }),
+        compact ?? false
+      );
     } catch (error) {
-      return textResult({ ok: false, error: error instanceof Error ? error.message : "unknown error" });
+      return queryTextResult(
+        { ok: false, error: error instanceof Error ? error.message : "unknown error" },
+        compact ?? false
+      );
     }
   }
 );
