@@ -7,6 +7,7 @@ import { openStore } from "./context/store.js";
 import { reviewFeature } from "./context/features.js";
 import { exportIndex } from "./context/export.js";
 import { buildRepositoryFlowManifest } from "./context/flow-manifest.js";
+import { serializeQueryOutput } from "./context/query-output.js";
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(name);
@@ -22,7 +23,7 @@ function args(name) {
 function has(name) { return process.argv.includes(name); }
 function print(value) { process.stdout.write(JSON.stringify(value, null, 2) + "\n"); }
 function usage() {
-  process.stderr.write(`Code Context Engine v0.1.6\n\nCommands:\n  index --repo <path> [--force]\n  query --repo <path> --task <text> [--max-files 12]\n  flow --repo <path> --start <node-id> [--start <node-id>...] [--direction forward|reverse] [--max-hops 3] [--branch-limit 8] [--node-limit 128] [--min-confidence static] [--edge-types api_request,route_handler]\n  status --repo <path>\n  review-feature --repo <path> --feature <id> [--note <text>]\n\nGenerated data lives in <repo>/.context-index. Feature definitions live in <repo>/.context-features/*.json.\n`);
+  process.stderr.write(`Code Context Engine v0.1.7\n\nCommands:\n  index --repo <path> [--force]\n  query --repo <path> --task <text> [--max-files 12] [--compact]\n  flow --repo <path> --start <node-id> [--start <node-id>...] [--direction forward|reverse] [--max-hops 3] [--branch-limit 8] [--node-limit 128] [--min-confidence static] [--edge-types api_request,route_handler]\n  status --repo <path>\n  review-feature --repo <path> --feature <id> [--note <text>]\n\nGenerated data lives in <repo>/.context-index. Feature definitions live in <repo>/.context-features/*.json.\n`);
 }
 
 const cmd = process.argv[2];
@@ -33,7 +34,8 @@ try {
   if (cmd === "index") print(await indexRepository({ repoRoot: repo, force: has("--force") }));
   else if (cmd === "query") {
     const task = arg("--task"); if (!task) throw new Error("--task is required");
-    print(queryContext({ repoRoot: repo, task, maxFiles: Number(arg("--max-files", "12")) }));
+    const result = queryContext({ repoRoot: repo, task, maxFiles: Number(arg("--max-files", "12")) });
+    process.stdout.write(serializeQueryOutput(result, { compact: has("--compact") }) + "\n");
   } else if (cmd === "flow") {
     const starts = args("--start");
     if (starts.length === 0) throw new Error("--start is required");

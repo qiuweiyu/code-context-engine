@@ -37,7 +37,7 @@ CCE turns those facts into a local machine-readable index that can be refreshed 
 
 ## Current status
 
-`v0.1.6` is an early open-source baseline.
+`v0.1.7` is an early open-source baseline.
 
 Current deep analyzers:
 
@@ -144,6 +144,17 @@ node src/cli.js query \
   --task "edit an unpublished manual task"
 ```
 
+For ChatGPT, Codex, or another coding agent, request the compact LLM view:
+
+```bash
+node src/cli.js query \
+  --repo /path/to/project \
+  --task "edit an unpublished manual task" \
+  --compact
+```
+
+Without `--compact`, the existing full diagnostic output remains unchanged.
+
 Inspect freshness:
 
 ```bash
@@ -199,7 +210,7 @@ Tools:
 - `context_query`
 - `context_index_status`
 
-The MCP server has no model dependency. It reads only repositories under `CCE_ALLOWED_ROOTS`.
+The MCP server has no model dependency. It reads only repositories under `CCE_ALLOWED_ROOTS`. The `context_query` tool accepts optional `compact: true` and uses the same compact projection as the CLI.
 
 Example:
 
@@ -210,7 +221,9 @@ node src/server.js
 
 ## Query result
 
-A task query returns a compact manifest instead of dumping the whole repository:
+A query has two output views. The default Full view keeps retrieval and graph diagnostics for engine inspection. `--compact` (or MCP `compact: true`) projects that same result into an LLM-oriented view containing coverage, selected files, bounded symbol hints, and tests. Compact mode does not run a different retrieval path.
+
+The default Full view includes diagnostics such as:
 
 ```json
 {
