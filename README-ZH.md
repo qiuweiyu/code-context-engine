@@ -8,7 +8,7 @@ Code Context Engine（CCE）是一个本地优先的静态代码分析工具。�
 
 CCE 面向开发者、IDE、CI 和 Coding Agent。核心索引流程不依赖任何 AI 模型或外部 API。
 
-**快速开始：** [中文操作流程](docs/QUICKSTART-ZH.md) · [English Quick Start](docs/QUICKSTART.md) · [互操作协议 v1](docs/INTEROPERABILITY-ZH.md)
+**快速开始：** [中文操作流程](docs/QUICKSTART-ZH.md) · [English Quick Start](docs/QUICKSTART.md) · [互操作协议 v1](docs/INTEROPERABILITY-ZH.md) · [IDE / 图原型](docs/IDE-GRAPH-ZH.md)
 
 ## 为什么做这个项目
 
@@ -398,7 +398,7 @@ WP7 之后的具体执行顺序见 [docs/DEVELOPMENT-PLAN-ZH.md](docs/DEVELOPMEN
 5. Go `go/packages` + `go/types`，随后 SSA / callgraph；
 6. 建立 Ground Truth Benchmark、Precision / Recall 和 Retrieval 质量指标；
 7. Contract 稳定后再增加 Java、Python Analyzer；
-8. WP15 已引入 Public Index v1、SCIP 导出和 Plugin Protocol v1；IDE / Graph Visualization 在 WP16 推进；
+8. WP15 已引入 Public Index v1、SCIP 导出和 Plugin Protocol v1；WP16 增加基于 Public Index 的编辑器定位与离线图可视化原型；
 9. 语义/Embedding/LLM Provider 只作为可选插件，不成为核心必需依赖。
 
 ## 非目标

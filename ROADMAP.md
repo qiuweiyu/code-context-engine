@@ -105,15 +105,15 @@ The next milestone should improve analyzer precision rather than continue adding
 
 ### WP14 — Non-HTTP flows
 
-- [ ] CLI, jobs, consumers and queues, preserving implemented HTTP flows
+- [x] CLI/main, jobs and consumer/queue entry flows while preserving implemented HTTP flows
 
 ### WP15 — SCIP, stable schema and public plugin API
 
-- [ ] freeze the external interface after multiple analyzer implementations
+- [x] Public Index v1, SCIP adapter and versioned Plugin Protocol v1 after multiple analyzer implementations
 
 ### WP16 — IDE / graph visualization; WP17 — Optional semantic providers
 
-- [ ] add editor/visualization integrations after schema stability
+- [x] add Public Index v1-based editor locate and offline graph visualization prototypes
 - [ ] keep all semantic providers optional and the deterministic core offline
 
 ### Future language adapters after the contract is stable
@@ -133,12 +133,12 @@ Potential native sources include Java compiler/JDT/JavaParser tooling, Python AS
 
 Some originally planned v0.3 work was delivered early in WP4–WP6. Remaining work:
 
-- [ ] entry-point registry
+- [x] entry-point registry
 - [x] HTTP route → handler → service/repository traversal where static graph evidence resolves the chain
 - [x] frontend page/client API → backend route linking for supported analyzers
-- [ ] CLI command flows
-- [ ] scheduled-job flows
-- [ ] event-consumer flows
+- [ ] framework-specific CLI subcommand flows
+- [x] scheduled-job flows
+- [x] event-consumer flows
 - [ ] queue publish/consume flows
 - [ ] webhook/event flow types where useful
 - [ ] feature grouping by route/module conventions
@@ -148,11 +148,11 @@ Some originally planned v0.3 work was delivered early in WP4–WP6. Remaining wo
 
 ## v0.4 — Interoperability
 
-- [ ] SCIP export
-- [ ] stable public JSON schema
-- [ ] public plugin API based on the WP8 analyzer contract
-- [ ] editor integration prototype
-- [ ] graph visualization export
+- [x] SCIP export
+- [x] stable Public Index v1 JSON schema
+- [x] public Plugin Protocol v1 based on the WP8 analyzer contract
+- [x] editor locate prototype
+- [x] self-contained graph visualization export
 
 ---
 
