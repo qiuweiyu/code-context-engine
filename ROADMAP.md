@@ -115,8 +115,8 @@ The next milestone should improve analyzer precision rather than continue adding
 
 - [x] add Public Index v1-based editor locate and offline graph visualization prototypes
 - [x] freeze Semantic Provider Protocol v1, privacy boundary and bounded rank-fusion rule
-- [ ] implement explicit opt-in provider execution with deterministic fallback
-- [ ] measure provider OFF/ON retrieval benefit without changing graph-fact quality
+- [x] implement explicit opt-in provider execution with deterministic fallback
+- [x] measure provider OFF/ON retrieval benefit without changing graph-fact quality
 
 ### Future language adapters after the contract is stable
 
