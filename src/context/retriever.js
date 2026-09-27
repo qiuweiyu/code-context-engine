@@ -345,6 +345,10 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
   const dir = path.isAbsolute(indexDir) ? indexDir : path.join(repoRoot, indexDir);
   const { db } = openStore(dir);
   try {
+    const analysisDiagnostics = JSON.parse(
+      db.prepare("SELECT value FROM meta WHERE key='analysis_diagnostics'").get()?.value ?? "[]"
+    );
+    const failedAnalyses = analysisDiagnostics.filter((entry) => entry.status !== "complete");
     const expansion = expandQuery(task, loadProjectAliases(repoRoot));
     const terms = expansion.terms;
     const projectTerms = aliasTermsFromExpansion(expansion, "project");
@@ -494,7 +498,7 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       strong_symbol_hits: rankedSymbols.filter((s)=>s.score >= 20).length,
       status: rankedFiles.length === 0
         ? "insufficient"
-        : (topFeatures.some((f)=>f.status !== "valid" || f.needs_review)
+        : (failedAnalyses.length > 0 || topFeatures.some((f)=>f.status !== "valid" || f.needs_review)
           ? "review_required"
           : ((rankedFiles.length > Math.max(60, maxFiles * 5) || rankedSymbols.filter((s)=>s.score >= 20).length > 250)
             ? "broad"
@@ -527,6 +531,7 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       symbols: symbolDetails,
       tests,
       coverage,
+      ...(analysisDiagnostics.length ? { analysis_diagnostics: analysisDiagnostics } : {}),
       semantic_refinement_recommended: ["insufficient", "broad"].includes(coverage.status)
     };
   } finally { db.close(); }

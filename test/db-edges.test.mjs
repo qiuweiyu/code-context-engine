@@ -1,3 +1,4 @@
+import { parserVersionFor } from "../src/context/analyzers.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -70,7 +71,7 @@ test("database source facts become conservative typed graph edges", async () => 
     try {
       assert.deepEqual(
         db.prepare("SELECT DISTINCT parser_version AS v FROM files ORDER BY v").all().map((row) => row.v),
-        ["0.2.5"]
+        [parserVersionFor("go"), parserVersionFor("sql")]
       );
 
       const dbObjects = db.prepare(

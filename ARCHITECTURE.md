@@ -123,7 +123,7 @@ WP7 real-project acceptance reduced serialized query output by roughly 93% acros
 
 ## Incremental indexing
 
-Every indexed file stores a content hash and parser version.
+Every indexed file stores a content hash and a version scoped to its analyzer (plus the global/contract version).
 
 A file is skipped when both are unchanged.
 
@@ -185,7 +185,7 @@ Planned native upgrades:
 
 CCE is not intended to be limited to Go, TypeScript, JavaScript or Vue.
 
-The next architecture milestone is a stable **Language Analyzer Contract**. A language adapter should be responsible for converting native compiler/parser evidence into normalized CCE facts. The rest of the engine should remain language-independent.
+WP8-B implements an **internal Language Analyzer Contract** in `src/context/analyzers.js`. It dispatches current parsers and normalizes compiler/parser or text evidence into file-keyed facts, with capabilities, per-analyzer versions and diagnostics. It is not yet a stable third-party plugin API. The graph, traversal and ranking still consume the established schema 8 facts. See [the contract](docs/ANALYZER-CONTRACT.md).
 
 Conceptually:
 
@@ -197,7 +197,7 @@ Python analyzer ─────┤ → Normalized CCE facts → Typed graph → 
 Clang analyzer ──────┘
 ```
 
-The planned analyzer contract will define capability metadata, analyzer versions, diagnostics, partial-result behavior and normalized outputs. New languages should be added through adapters rather than by scattering language-specific conditions through graph/retrieval code.
+The internal contract defines capability metadata, analyzer versions, diagnostics, partial-result handling and normalized in-memory facts. On parse failure the previous facts are retained and status/query surfaces report the diagnostic; repaired files retry automatically. External stable fact persistence and plugin ABI remain future work. New languages should use adapters rather than add conditions in graph/retrieval code.
 
 Likely future adapters include Java, Python, C/C++, C#, Rust and additional ecosystems.
 
@@ -221,6 +221,6 @@ The core indexing/query modules remain usable without MCP or any AI system. MCP 
 
 ## Development direction
 
-The immediate architecture priority is **not** to add many new languages independently. It is to establish the Language Analyzer Contract first, then migrate existing TS/JS/Vue and Go analyzers toward compiler-backed evidence. This prevents future Java/Python/C/C++ support from requiring repeated core rewrites.
+The immediate priority after WP8-B is to compare TypeScript Compiler API, Vue compiler-sfc and Go type evidence against the WP8-A quality baseline. More languages follow proven adapters and measured quality, rather than a public ABI frozen before compiler integrations.
 
 See [ROADMAP.md](ROADMAP.md) and [docs/DEVELOPMENT-PLAN.md](docs/DEVELOPMENT-PLAN.md).

@@ -6,8 +6,12 @@ export function readIndexStatus({ repoRoot, indexDir = ".context-index" }) {
   const { db, dbPath } = openStore(dir);
   try {
     const count = (table) => Number(db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n);
+    const diagnostics = JSON.parse(
+      db.prepare("SELECT value FROM meta WHERE key='analysis_diagnostics'").get()?.value ?? "[]"
+    );
     return {
       ok: true,
+      ...(diagnostics.length ? { analysis_diagnostics: diagnostics } : {}),
       database: dbPath,
       indexed_at: db.prepare("SELECT value FROM meta WHERE key='last_indexed_at'").get()?.value ?? null,
       repository: db.prepare("SELECT value FROM meta WHERE key='repository_root'").get()?.value ?? repoRoot,

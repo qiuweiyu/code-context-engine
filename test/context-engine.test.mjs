@@ -1,3 +1,4 @@
+import { parserVersionFor } from "../src/context/analyzers.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -621,7 +622,7 @@ test("frontend requests resolve to backend routes through method and normalized 
       const parserVersions = db.prepare(
         "SELECT DISTINCT parser_version FROM files ORDER BY parser_version"
       ).all().map((row) => row.parser_version);
-      assert.deepEqual(parserVersions, ["0.2.5"]);
+      assert.deepEqual(parserVersions, [parserVersionFor("go"), parserVersionFor("typescript")]);
 
       const getClient = db.prepare(
         "SELECT * FROM routes WHERE direction='client' AND symbol_id LIKE '%::getItem'"

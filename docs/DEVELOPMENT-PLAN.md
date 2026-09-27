@@ -1,10 +1,10 @@
 # CCE Development Plan
 
-Status: **WP8-A seed implementation in progress; WP8-B and later planned**.
+Status: **WP8-A merged; WP8-B implementation in progress; WP9 and later planned**.
 
 Planning baseline: `4f69f4852bc622ed7ae281a268498fd7f2daaf86` (v0.1.7). Documentation baseline: `8ef900b7f51182cbe5af63cfb3fb13686e6a9299`.
 
-On 2026-09-27 Ubuntu `/opt/CCE/code-context-engine` main, origin/main and GitHub main were verified equal to `8ef900b7...` with divergence 0/0; 38/38 regression tests passed. A pre-existing untracked `package-lock.json` was preserved. Windows sync was not verified in this development turn. WP8-A starts from this baseline on one task branch.
+On 2026-09-27 Ubuntu `/opt/CCE/code-context-engine` main, origin/main and GitHub main were verified equal to `8ef900b7...` with divergence 0/0; 38/38 regression tests passed. A pre-existing untracked `package-lock.json` was preserved. Windows sync was not verified in this development turn. WP8-A was merged as `f138b03caec29c323cb9f59fdb2b6670be009d42`. WP8-B starts from this merged baseline.
 
 ## 1. Current accepted baseline
 
@@ -25,7 +25,7 @@ The documentation convergence created `8ef900b7...`; Ubuntu main was verified at
 
 ## 2. Current development state
 
-Ubuntu main synchronization and the existing test gate passed on 2026-09-27. Work is now on `work/cce-wp8a-quality-baseline`. The pre-existing untracked lockfile has not been added, overwritten or removed. GitHub main remains the published baseline until a WP8-A PR is accepted.
+Ubuntu main synchronization and the existing test gate passed on 2026-09-27. Work is now on `work/cce-wp8b-analyzer-contract`. The pre-existing untracked lockfile has not been added, overwritten or removed. GitHub main is the WP8-A merge baseline until WP8-B PR acceptance.
 
 ## 3. Environment and subsequent sync gates
 
@@ -35,12 +35,12 @@ Ubuntu: `/opt/CCE/code-context-engine`, Node 22.22.1, Go 1.26.0. CI uses Node 22
 
 ## 4. Revised engineering sequence (2026-09-27)
 
-This sequence supersedes the earlier ordering that placed the first accuracy corpus at WP14. WP8-A has begun on branch `work/cce-wp8a-quality-baseline`; later packages remain planned. An analyzer change must be measured against a frozen corpus, not just the regression suite.
+This sequence supersedes the earlier ordering that placed the first accuracy corpus at WP14. WP8-A is merged, and WP8-B is being implemented on `work/cce-wp8b-analyzer-contract`; later packages remain planned. An analyzer change must be measured against a frozen corpus, not just the regression suite.
 
 | Package | Goal and scope | Non-goals / dependency | Acceptance and risk |
 | --- | --- | --- | --- |
 | WP8-A | Check in labeled positive and negative graph facts, query relevance, a reproducible runner and timing/output measurements. The seed includes Go ambiguity, TS barrel, Vue dual-script, route ambiguity and comment false positives; later expand JS aliases, dynamic import and real-repo labels. | No parser/retriever changes; baseline v0.1.7. | Reproducible edge precision/recall over *labeled facts*, Top-K/MRR, cold/warm index, query time and bytes; risk: a tiny corpus overstates quality. |
-| WP8-B | Internal language analyzer contract with dispatch, fact provenance, diagnostics, partial results and analyzer-specific invalidation. Wrap existing analyzers. | No public stable plugin ABI or new language; WP8-A baseline. | All regression tests and frozen query baselines remain compatible; failure does not silently become an empty successful analysis. Risk: symbol IDs and schema migration. |
+| WP8-B | Internal language analyzer contract with dispatch, fact provenance, diagnostics, partial results and analyzer-specific invalidation. Wrap existing analyzers. | No public stable plugin ABI or new language; WP8-A baseline. | All 39 baseline regression tests and frozen query baselines remain compatible; failure does not silently become an empty successful analysis. Risk: symbol IDs and schema migration. |
 | WP9 | TS/JS TypeScript Compiler API **and module resolution together**: Program/TypeChecker, tsconfig/jsconfig aliases, re-exports and barrels. | Do not retune Retriever; WP8-B. | Improve labeled import/call and retrieval results without an unreviewed false-positive increase; compare index cost. Risk: config gaps and memory. |
 | WP10 | Vue compiler-sfc, both script blocks, script setup macros and page/component/composable evidence. | Not every Vue ecosystem convention; WP9. | Ground-truth SFC cases and real project flow comparison. Risk: source maps and template semantics. |
 | WP11 | Go go/packages and go/types for cross-package calls, method sets, generics and interface evidence. | No SSA yet; WP8-B. | Compare correct/incorrect/unresolved edges and cost against the Go baseline. Risk: build tags and unavailable dependencies. |
@@ -51,7 +51,7 @@ This sequence supersedes the earlier ordering that placed the first accuracy cor
 | WP16 | IDE and graph visualization prototypes. | Depends on WP15. | Navigable code and evidence. |
 | WP17 | Optional semantic providers only. | No required LLM, embedding or source upload. | Core offline mode and measurable optional benefit. |
 
-Benchmark usage and labeling limits: [BENCHMARKS.md](BENCHMARKS.md). The current small corpus is a **seed baseline**, not a completed multi-language accuracy claim. The originally proposed WP11 module-resolution work is merged into WP9; the originally proposed WP14 benchmark starts in WP8-A. Keep one bounded branch per package and record measured evidence in the PR.
+Benchmark usage and labeling limits: [BENCHMARKS.md](BENCHMARKS.md). The implemented internal boundary is documented in [ANALYZER-CONTRACT.md](ANALYZER-CONTRACT.md). The current small corpus is a **seed baseline**, not a completed multi-language accuracy claim. The originally proposed WP11 module-resolution work is merged into WP9; the originally proposed WP14 benchmark starts in WP8-A. Keep one bounded branch per package and record measured evidence in the PR.
 ## 5. Language expansion policy
 
 CCE is a multi-language engine, not a Go/TypeScript/Vue-only product.
@@ -101,4 +101,4 @@ Avoid accumulating unnecessary long-lived branches.
 
 ## 7. Next action
 
-Complete WP8-A corpus expansion and baseline review, then implement WP8-B on a new branch from accepted main.
+Finish WP8-B contract tests and benchmark comparison, review its PR, then start WP9 on an accepted main. Broaden WP8-A seed labels before promoting strict quality gates.
