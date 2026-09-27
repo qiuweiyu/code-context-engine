@@ -123,7 +123,7 @@ The next milestone should improve analyzer precision rather than continue adding
 
 - [x] freeze the v0.2.0 npm package surface and clean-install smoke test
 - [x] refresh README / Quick Start / release metadata for public use
-- [ ] pass Ubuntu + Windows release CI and post-merge verification
+- [x] pass Ubuntu + Windows release CI and post-merge verification
 - [ ] publish the v0.2.0 Git tag and GitHub Release
 
 ### Future language adapters after the contract is stable
