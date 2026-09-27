@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code-context-engine.dev/schema/semantic-provider-spec-v1.schema.json",
+  "title": "CCE Semantic Provider Spec v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "version", "command"],
+  "properties": {
+    "protocol": { "const": "cce.semantic-provider-spec" },
+    "version": { "const": "1.0" },
+    "command": { "type": "string", "minLength": 1, "maxLength": 1024 },
+    "args": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "type": "string", "maxLength": 2048 },
+      "default": []
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 10000,
+      "default": 1500
+    },
+    "weight": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 0.35,
+      "default": 0.25
+    }
+  }
+}

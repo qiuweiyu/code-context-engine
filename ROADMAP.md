@@ -114,7 +114,9 @@ The next milestone should improve analyzer precision rather than continue adding
 ### WP16 — IDE / graph visualization; WP17 — Optional semantic providers
 
 - [x] add Public Index v1-based editor locate and offline graph visualization prototypes
-- [ ] keep all semantic providers optional and the deterministic core offline
+- [x] freeze Semantic Provider Protocol v1, privacy boundary and bounded rank-fusion rule
+- [ ] implement explicit opt-in provider execution with deterministic fallback
+- [ ] measure provider OFF/ON retrieval benefit without changing graph-fact quality
 
 ### Future language adapters after the contract is stable
 

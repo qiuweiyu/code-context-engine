@@ -35,7 +35,7 @@ Ubuntu：`/opt/CCE/code-context-engine`，Node 22.22.1、Go 1.26.0。CI 用 Node
 
 ## 4. 调整后的工程顺序（2026-09-27）
 
-本节替代旧的“到 WP14 才建立首个准确率语料”的顺序。WP8-A 到 WP15 已合并。条件式 WP12 SSA/callgraph 门槛继续暂缓，因为当前冻结语料没有需要 SSA 才能解决的已标注漏检。WP16 当前在 `work/cce-wp16-ide-graph-view` 开发，WP17 仍为后续计划。分析器升级要和固定标注语料对比，不能只看回归测试全绿。
+本节替代旧的“到 WP14 才建立首个准确率语料”的顺序。WP8-A 到 WP16 已合并。条件式 WP12 SSA/callgraph 门槛继续暂缓，因为当前冻结语料没有需要 SSA 才能解决的已标注漏检。WP17 已在 `work/cce-wp17-semantic-providers` 启动；Semantic Provider Protocol v1、隐私边界和有界 rank-fusion 规则已在 [SEMANTIC-PROVIDER-ZH.md](SEMANTIC-PROVIDER-ZH.md) 冻结。分析器升级要和固定标注语料对比，不能只看回归测试全绿。
 
 | 工作包 | 目标与范围 | 非目标与依赖 | 验收与风险 |
 | --- | --- | --- | --- |
@@ -49,7 +49,7 @@ Ubuntu：`/opt/CCE/code-context-engine`，Node 22.22.1、Go 1.26.0。CI 用 Node
 | WP14 | CLI/job/consumer/queue 等非 HTTP 入口与流程。 | 保留已实现 HTTP 流程，依赖可靠 Facts。 | 入口至数据/测试的标注链路。 |
 | WP15 | SCIP、稳定公共 Schema 和第三方插件 API。 | 不过早冻结 ABI；依赖多个真实分析器。 | 有版本化消费者及迁移案例。 |
 | WP16 | IDE/图可视化原型。 | 依赖 WP15。 | 可定位源代码及依据。 |
-| WP17 | 可选语义 Provider。 | 核心不依赖 LLM/Embedding/源码上传。 | 离线核心可独立运行，附加收益可量化。 |
+| WP17 | 可选语义 Provider：版本化本地进程协议、有界 rerank、显式 opt-in。 | 核心不依赖 LLM/Embedding/厂商 SDK/源码上传，Provider 不拥有图事实。 | Provider 关闭时基线兼容；量化 OFF/ON 检索收益、延迟和 fallback。 |
 
 评估的用法与标注边界见 [BENCHMARKS.md](BENCHMARKS.md)，已实现的内部契约见 [ANALYZER-CONTRACT-ZH.md](ANALYZER-CONTRACT-ZH.md)。当前冻结的小型语料仍只是**起步基线**，不能宣称多语言准确率已经达到产品标准。原 WP11 模块解析并入 WP9；原 WP14 Benchmark 提前到 WP8-A。每个工作包仍只用一个有边界的任务分支，PR 记录量测证据。
 ## 5. 多语言支持原则
