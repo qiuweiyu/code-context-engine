@@ -37,17 +37,26 @@ CCE turns those facts into a local machine-readable index that can be refreshed 
 
 ## Current status
 
-`v0.1.7` is an early open-source baseline.
+`v0.1.7` is the current early open-source baseline.
 
-Current deep analyzers:
+Implemented today:
 
-- Go — AST-based function/method extraction, signatures, comments, calls and imports.
-- TypeScript / JavaScript — function extraction, imports and call references.
+- Go — AST-based function/method extraction, signatures, comments, package-aware call facts and imports.
+- TypeScript / JavaScript — conservative function, import and call-reference extraction.
 - Vue SFC — script/script-setup extraction plus TypeScript/JavaScript analysis.
 - SQL and HTTP route detection — lightweight deterministic extraction.
-- Tests — filename and call-based mappings.
+- Tests — filename/call-based mappings plus typed `test_of` edges.
+- Typed graph — `call`, `import`, `route_handler`, `api_request`, `db_read`, `db_write`, `test_of`, `page_api`.
+- Edge confidence — `exact`, `static`, `inferred`, `unresolved`.
+- Bounded graph traversal — forward/reverse, up to 6 hops, without traversing unresolved edges.
+- Cross-surface retrieval — page/API/backend/database/test evidence can be combined when the graph proves the relationship.
+- Compact query output — CLI and MCP share the same LLM-oriented projection.
 
-The TypeScript/Vue analyzer is intentionally conservative in v0.1 and will move to TypeScript Compiler API + Vue compiler-sfc in a later milestone.
+WP7 acceptance on three real Student Growth Companion queries reduced serialized query output by roughly 93% while preserving selected paths, coverage status and tests.
+
+The TypeScript/Vue analyzer is still intentionally conservative. The next architecture milestone is a stable language-analyzer contract, followed by TypeScript Compiler API, Vue compiler-sfc and stronger native type-system integration.
+
+CCE is not intended to remain limited to Go/TypeScript/JavaScript/Vue. Future analyzers can target Java, Python, C/C++, C#, Rust and other ecosystems while reusing the same normalized facts, graph, retrieval and MCP layers.
 
 ## What it generates
 
@@ -308,14 +317,19 @@ See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 See [ROADMAP.md](ROADMAP.md).
 
+The detailed post-WP7 execution sequence is in [docs/DEVELOPMENT-PLAN.md](docs/DEVELOPMENT-PLAN.md).
+
 Near-term priorities:
 
-1. TypeScript Compiler API integration.
-2. Vue compiler-sfc integration.
-3. Broader compiler-backed call/import resolution.
-4. SCIP export.
-5. Benchmark corpus for graph correctness, retrieval quality and incremental performance.
-6. Optional semantic providers as plugins — never required by the core engine.
+1. Language Analyzer Architecture & Plugin Contract.
+2. TypeScript Compiler API integration.
+3. Vue compiler-sfc integration.
+4. TypeScript/JavaScript module and path-alias resolution.
+5. Go `go/packages` + `go/types`, followed by SSA/callgraph.
+6. Ground-truth benchmark corpus and precision/recall/retrieval metrics.
+7. Java and Python adapters after the analyzer contract is stable.
+8. SCIP/editor/visualization interoperability after schema/plugin boundaries mature.
+9. Optional semantic providers as plugins — never required by the core engine.
 
 ## Non-goals
 
