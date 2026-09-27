@@ -6,3 +6,6 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+/internal/scipexporter/scipexporter
+/internal/scipexporter/scipexporter.exe

@@ -8,7 +8,7 @@ Code Context Engine（CCE）是一个本地优先的静态代码分析工具。�
 
 CCE 面向开发者、IDE、CI 和 Coding Agent。核心索引流程不依赖任何 AI 模型或外部 API。
 
-**快速开始：** [中文操作流程](docs/QUICKSTART-ZH.md) · [English Quick Start](docs/QUICKSTART.md)
+**快速开始：** [中文操作流程](docs/QUICKSTART-ZH.md) · [English Quick Start](docs/QUICKSTART.md) · [互操作协议 v1](docs/INTEROPERABILITY-ZH.md)
 
 ## 为什么做这个项目
 
@@ -398,7 +398,7 @@ WP7 之后的具体执行顺序见 [docs/DEVELOPMENT-PLAN-ZH.md](docs/DEVELOPMEN
 5. Go `go/packages` + `go/types`，随后 SSA / callgraph；
 6. 建立 Ground Truth Benchmark、Precision / Recall 和 Retrieval 质量指标；
 7. Contract 稳定后再增加 Java、Python Analyzer；
-8. Schema / Plugin 边界稳定后再推进 SCIP、IDE、Graph Visualization；
+8. WP15 已引入 Public Index v1、SCIP 导出和 Plugin Protocol v1；IDE / Graph Visualization 在 WP16 推进；
 9. 语义/Embedding/LLM Provider 只作为可选插件，不成为核心必需依赖。
 
 ## 非目标
@@ -422,6 +422,6 @@ MIT
 
 ## 分析器质量基线
 
-运行 `npm run benchmark` 查看已标注图边、查询命中和索引成本。起步语料保留了一个已知的 TypeScript barrel 漏检；详见 [Benchmark 说明](docs/BENCHMARKS.md)。
+运行 `npm run benchmark` 查看已标注图边、查询命中和索引成本。当前冻结语料保留了一个明确标注的 comment/text-pattern 假阳性；详见 [Benchmark 说明](docs/BENCHMARKS.md)。
 
 内部分析器边界：[契约说明](docs/ANALYZER-CONTRACT-ZH.md)。

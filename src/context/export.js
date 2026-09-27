@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { listTypedEdges } from "./edges.js";
+import { exportPublicIndexV1, PUBLIC_INDEX_FORMAT, PUBLIC_INDEX_VERSION } from "../public/v1.js";
 
 async function writeJsonlAtomic(filePath, records) {
   const tmp = `${filePath}.tmp`;
@@ -45,9 +46,16 @@ export async function exportIndex(db, indexDir) {
     writeJsonlAtomic(path.join(indexDir, "edges.jsonl"), edges),
     writeJsonlAtomic(path.join(indexDir, "changes.jsonl"), changes)
   ]);
+  const publicManifest = await exportPublicIndexV1(db, indexDir);
   const manifest = {
     schema_version: Number(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.value ?? 0),
     indexed_at: db.prepare("SELECT value FROM meta WHERE key='last_indexed_at'").get()?.value ?? null,
+    public_index: {
+      format: PUBLIC_INDEX_FORMAT,
+      version: PUBLIC_INDEX_VERSION,
+      path: "public/v1",
+      counts: publicManifest.counts
+    },
     counts: {
       files: db.prepare("SELECT COUNT(*) AS n FROM files").get().n,
       symbols: symbols.length,

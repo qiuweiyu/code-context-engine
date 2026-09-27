@@ -8,7 +8,7 @@ Code Context Engine (CCE) is a local-first static analysis tool that builds a st
 
 CCE is designed for both humans and coding agents. The core indexing path is deterministic and does not require an AI model or external API.
 
-**Quick Start:** [docs/QUICKSTART.md](docs/QUICKSTART.md) · [中文快速开始](docs/QUICKSTART-ZH.md)
+**Quick Start:** [docs/QUICKSTART.md](docs/QUICKSTART.md) · [中文快速开始](docs/QUICKSTART-ZH.md) · [Interoperability v1](docs/INTEROPERABILITY.md)
 
 
 ## Why
@@ -328,7 +328,7 @@ Near-term priorities:
 5. Go `go/packages` + `go/types`, followed by SSA/callgraph.
 6. Ground-truth benchmark corpus and precision/recall/retrieval metrics.
 7. Java and Python adapters after the analyzer contract is stable.
-8. SCIP/editor/visualization interoperability after schema/plugin boundaries mature.
+8. Public Index v1, SCIP export and Plugin Protocol v1 are introduced in WP15; IDE/graph visualization follows in WP16.
 9. Optional semantic providers as plugins — never required by the core engine.
 
 ## Non-goals
@@ -350,6 +350,6 @@ MIT
 
 ## Analyzer quality baseline
 
-Run `npm run benchmark` to inspect labeled graph edges, query relevance and indexing cost. The small seed corpus includes a known TypeScript barrel miss; see [benchmark guide](docs/BENCHMARKS.md).
+Run `npm run benchmark` to inspect labeled graph edges, query relevance and indexing cost. The frozen corpus keeps one explicitly labeled comment/text-pattern false positive; see [benchmark guide](docs/BENCHMARKS.md).
 
 Internal analyzer boundary: [contract](docs/ANALYZER-CONTRACT.md).
