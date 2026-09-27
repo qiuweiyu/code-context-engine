@@ -74,6 +74,32 @@ async function runBin(installRoot, name, args, options = {}) {
   return run(localBin(installRoot, name), args, options);
 }
 
+async function stopChildTree(child) {
+  if (child.exitCode !== null) return;
+
+  if (process.platform === "win32" && child.pid) {
+    try {
+      await run("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"]);
+    } catch {
+      child.kill();
+    }
+  } else {
+    child.kill("SIGTERM");
+  }
+
+  await new Promise((resolve) => {
+    if (child.exitCode !== null) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(resolve, 2000);
+    child.once("exit", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
 async function verifyMcpStarts(installRoot, fixtureRoot) {
   const command = localBin(installRoot, "code-context-engine-mcp");
   const child = spawn(command, [], {
@@ -88,22 +114,25 @@ async function verifyMcpStarts(installRoot, fixtureRoot) {
   child.stderr.on("data", (chunk) => { stderr += chunk; });
 
   await new Promise((resolve, reject) => {
+    const onExit = (code) => {
+      clearTimeout(timer);
+      reject(new Error(
+        "MCP server exited before smoke window with code " + code + ": " + stderr.trim()
+      ));
+    };
     const timer = setTimeout(() => {
-      if (child.exitCode !== null) {
-        reject(new Error("MCP server exited before smoke window: " + stderr.trim()));
-        return;
-      }
-      child.kill();
+      child.removeListener("exit", onExit);
       resolve();
     }, 400);
-    child.once("error", (error) => { clearTimeout(timer); reject(error); });
-    child.once("exit", (code) => {
-      if (code !== null && code !== 0) {
-        clearTimeout(timer);
-        reject(new Error("MCP server exited early with code " + code + ": " + stderr.trim()));
-      }
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      child.removeListener("exit", onExit);
+      reject(error);
     });
+    child.once("exit", onExit);
   });
+
+  await stopChildTree(child);
 }
 
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), "cce-release-smoke-"));
@@ -181,5 +210,10 @@ try {
     smoke: { index: true, status: true, query: true, mcp_start: true }
   }, null, 2) + "\n");
 } finally {
-  await fs.rm(temp, { recursive: true, force: true });
+  await fs.rm(temp, {
+    recursive: true,
+    force: true,
+    maxRetries: process.platform === "win32" ? 8 : 2,
+    retryDelay: 250
+  });
 }
