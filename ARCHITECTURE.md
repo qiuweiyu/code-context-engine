@@ -2,39 +2,11 @@
 
 ## Goal
 
-Code Context Engine builds a deterministic, refreshable knowledge layer over a local repository.
+Code Context Engine builds a deterministic, refreshable, language-extensible knowledge layer over a local repository.
 
-The engine separates **source facts** from **human business semantics**.
+The engine separates **source facts** from **human business semantics**, and separates **language-specific analysis** from **language-independent graph/query behavior**.
 
-### Source facts
-
-Generated from code and never manually maintained:
-
-- files and languages,
-- symbols,
-- method/function signatures,
-- parameters and return types,
-- comments,
-- line ranges,
-- imports,
-- call references,
-- HTTP routes,
-- database objects,
-- test mappings,
-- content / implementation / semantic hashes.
-
-### Business semantics
-
-Optional, human-reviewed data that static analysis cannot always know:
-
-- feature names,
-- business intent,
-- business invariants,
-- ordered feature steps.
-
-Feature steps reference source symbols by `symbol_id`. Exported feature views resolve the current source facts from the index.
-
-## Pipeline
+## Current architecture
 
 ```text
 Git tracked files
@@ -45,18 +17,109 @@ Language detection
       ↓
 Language analyzers
       ↓
-Facts per file
+Normalized source facts
       ↓
 SQLite transaction
       ↓
-Dependency resolution
+Dependency / route / data / test resolution
       ↓
-Test mapping
+Typed edge graph
       ↓
-Feature freshness propagation
+Bounded forward/reverse traversal
       ↓
-JSONL / manifest export
+Task retrieval + cross-surface selection
+      ↓
+Full diagnostics / Compact LLM projection
+      ↓
+CLI / MCP
 ```
+
+## Source facts
+
+Generated from code and never manually maintained as business truth:
+
+- files and languages,
+- symbols,
+- method/function signatures,
+- parameters and return types,
+- comments,
+- line ranges,
+- imports,
+- call references,
+- HTTP routes,
+- client requests,
+- database objects,
+- test mappings,
+- content / implementation / semantic hashes.
+
+## Business semantics
+
+Optional, human-reviewed data that static analysis cannot always know:
+
+- feature names,
+- business intent,
+- business invariants,
+- ordered feature steps.
+
+Feature steps reference source symbols by `symbol_id`. Exported feature views resolve current source facts from the index.
+
+## Typed graph
+
+CCE currently persists typed edges in schema version 8.
+
+Implemented edge types:
+
+- `call`
+- `import`
+- `route_handler`
+- `api_request`
+- `db_read`
+- `db_write`
+- `test_of`
+- `page_api`
+
+Implemented confidence levels:
+
+- `exact` — compiler/type-system or equivalent exact evidence when available,
+- `static` — syntactically/static-analysis resolved with high confidence,
+- `inferred` — convention or heuristic based,
+- `unresolved` — a reference was observed but its target is not proven.
+
+CCE surfaces uncertainty instead of silently presenting inferred runtime behavior as fact.
+
+Current query traversal uses bounded graph expansion, can walk forward and reverse evidence, supports at most 6 hops, and does not continue through unresolved links. Width/node limits prevent a high-fanout node from exploding query context.
+
+## Cross-surface retrieval
+
+The graph can bridge supported application surfaces when static evidence connects them. Typical supported chains include:
+
+```text
+Page / View
+   ↓ page_api
+Client API function
+   ↓ api_request
+HTTP Route
+   ↓ route_handler
+Handler
+   ↓ call
+Service
+   ↓ call
+Repository
+   ↓ db_read / db_write
+Database object
+```
+
+Reverse traversal can recover alternate clients, callers and related tests. Shared database evidence can also seed cross-surface retrieval when differently named code paths converge on the same data object.
+
+This is static analysis, not proof of every runtime edge. Reflection, dynamic dispatch, configuration-driven wiring, generated code and runtime registration can remain incomplete.
+
+## Query and Compact projection
+
+Task retrieval combines deterministic query expansion, project aliases, lexical evidence and typed-graph expansion.
+
+The default Full output retains retrieval/graph diagnostics. Compact mode projects the same retrieval result into a smaller LLM-oriented shape. Compact mode does **not** execute a different ranking or graph path.
+
+WP7 real-project acceptance reduced serialized query output by roughly 93% across three Student Growth Companion benchmarks while preserving selected paths, coverage status and tests.
 
 ## Incremental indexing
 
@@ -66,18 +129,20 @@ A file is skipped when both are unchanged.
 
 When a file changes, CCE:
 
-1. records the old symbols,
+1. records old symbols,
 2. reparses the changed file,
 3. replaces its source facts,
 4. compares old/new symbol implementation and semantic hashes,
 5. marks dependent features `needs_review`,
-6. marks unresolved references `stale`,
-7. resolves dependencies and tests,
+6. marks unresolved feature references `stale`,
+7. resolves dependencies, routes, tests and typed edges,
 8. regenerates exported structure files.
+
+Edge construction may depend on facts from multiple files. When resolver/edge semantics change, a force rebuild or parser/schema version change may be required even when source file hashes are unchanged.
 
 ## Symbol identity
 
-A symbol ID must be deterministic within a repository and stable when the symbol itself has not been renamed or moved in a way that changes its logical identity.
+A symbol ID must be deterministic within a repository and stable when the logical symbol has not changed.
 
 Current examples:
 
@@ -86,45 +151,55 @@ go:internal/task/service.go::*Service.UpdateManualTask
 typescript:admin/src/task.ts::updateManualTask
 ```
 
-Go symbol IDs include the source file path so platform/build-tag variants with the same receiver and method name remain distinct. The symbol identity strategy will evolve carefully because feature freshness depends on it.
+Go symbol IDs include source paths so platform/build-tag variants with identical receiver/method names remain distinct. Symbol identity changes must be conservative because feature freshness and graph references depend on them.
 
-## Confidence and evidence
+## Language analyzer boundary
 
-Not all relationships are equally certain.
+### Current analyzers
 
-Future schemas should distinguish edges such as:
+#### Go
 
-- `exact` — compiler/type-system resolved,
-- `static` — syntactically resolved with high confidence,
-- `inferred` — convention or heuristic based,
-- `unresolved` — reference observed but destination unknown.
+Current Go parsing uses Go AST tooling through a helper process. It already extracts package-aware function/method facts and records conservative receiver/receiver-field call metadata that the resolver can use for interface/concrete-field call edges.
 
-CCE should surface uncertainty instead of silently presenting inferred runtime behavior as fact.
-
-## Language analyzers
-
-### Go
-
-Current Go parsing uses Go AST tooling through a small helper process.
-
-Planned deep analysis:
+It is **not yet** a full compiler/type-system callgraph. Planned native upgrades:
 
 - `go/packages`,
 - `go/types`,
 - SSA,
 - callgraph,
-- interface implementation resolution.
+- stronger interface/generic resolution.
 
-### TypeScript / JavaScript / Vue
+#### TypeScript / JavaScript / Vue
 
-The v0.1 analyzer extracts common declarations/imports/calls conservatively.
+The current analyzer extracts common declarations, imports and calls conservatively. Vue SFC source is currently reduced to script content before TS/JS analysis.
 
-Planned deep analysis:
+Planned native upgrades:
 
 - TypeScript Compiler API `Program` + `TypeChecker`,
 - Vue `@vue/compiler-sfc`,
-- path alias resolution,
-- component/store/API relationships.
+- tsconfig/jsconfig path aliases,
+- re-export/module resolution,
+- component/store/composable/API relationships.
+
+### Multi-language direction
+
+CCE is not intended to be limited to Go, TypeScript, JavaScript or Vue.
+
+The next architecture milestone is a stable **Language Analyzer Contract**. A language adapter should be responsible for converting native compiler/parser evidence into normalized CCE facts. The rest of the engine should remain language-independent.
+
+Conceptually:
+
+```text
+Go analyzer ─────────┐
+TS/JS/Vue analyzer ──┤
+Java analyzer ───────┤
+Python analyzer ─────┤ → Normalized CCE facts → Typed graph → Retrieval → MCP/CLI
+Clang analyzer ──────┘
+```
+
+The planned analyzer contract will define capability metadata, analyzer versions, diagnostics, partial-result behavior and normalized outputs. New languages should be added through adapters rather than by scattering language-specific conditions through graph/retrieval code.
+
+Likely future adapters include Java, Python, C/C++, C#, Rust and additional ecosystems.
 
 ## Storage
 
@@ -132,8 +207,20 @@ SQLite is the query database. JSONL files are transparent exports for inspection
 
 Generated `.context-index` data is disposable and can always be rebuilt from source plus optional `.context-features` definitions.
 
+## Security boundary
+
+Source discovery is restricted to tracked source files after safety filtering. Sensitive file patterns are excluded, symlinks are not followed when reading repository source, and MCP repository access is constrained by `CCE_ALLOWED_ROOTS`.
+
+The core engine does not require network access or an AI model.
+
 ## MCP boundary
 
 MCP is an adapter over the local engine, not the engine itself.
 
-The core indexing/query modules remain usable without MCP or any AI system.
+The core indexing/query modules remain usable without MCP or any AI system. MCP exposes repository indexing/status/query operations while preserving the same deterministic core and optional Compact projection.
+
+## Development direction
+
+The immediate architecture priority is **not** to add many new languages independently. It is to establish the Language Analyzer Contract first, then migrate existing TS/JS/Vue and Go analyzers toward compiler-backed evidence. This prevents future Java/Python/C/C++ support from requiring repeated core rewrites.
+
+See [ROADMAP.md](ROADMAP.md) and [docs/DEVELOPMENT-PLAN.md](docs/DEVELOPMENT-PLAN.md).

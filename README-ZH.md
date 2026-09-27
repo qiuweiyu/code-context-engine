@@ -52,22 +52,27 @@ Human / IDE / Coding Agent
 
 ## 当前状态
 
-`v0.1.7` 是早期开源基线。
+`v0.1.7` 是当前早期开源基线。
 
-当前已包含：
+当前已经实现：
 
-- Go：基于 AST 的函数/方法、签名、注释、调用和 import 提取；
-- TypeScript / JavaScript：函数、import 和调用引用基础提取；
+- Go：基于 AST 的函数/方法、签名、注释、包信息、保守调用事实和 import 提取；
+- TypeScript / JavaScript：函数、import 和调用引用的保守静态提取；
 - Vue SFC：提取 `<script>` / `<script setup>` 后进行 TS/JS 分析；
 - SQL 与 HTTP Route：轻量确定性识别；
-- Tests：根据测试文件名和调用关系建立测试映射；
-- SQLite + JSONL 索引；
-- 增量更新；
-- Feature Freshness；
-- CLI 查询；
-- MCP 只读接口。
+- Tests：测试映射以及 typed `test_of` 边；
+- Typed Graph：`call`、`import`、`route_handler`、`api_request`、`db_read`、`db_write`、`test_of`、`page_api`；
+- Edge Confidence：`exact`、`static`、`inferred`、`unresolved`；
+- 有界图遍历：支持 forward / reverse，最多 6 hops，不沿 unresolved 边继续传播；
+- Cross-surface Retrieval：当图中存在可证明关系时，可以把页面、API、后端、数据库和测试证据组合到一次查询中；
+- Compact Query Output：CLI / MCP 共享同一套面向 Coding Agent 的 Compact projection；
+- SQLite + JSONL 索引、增量更新、Feature Freshness、CLI 查询和 MCP 只读接口。
 
-目前 TypeScript/Vue 分析仍然是保守实现。后续会迁移到 TypeScript Compiler API 和 Vue `@vue/compiler-sfc`。
+WP7 在真实 Student Growth Companion 三组 Query 上，Compact 序列化输出约减少 93%，同时保持待读路径、coverage 状态和 tests。
+
+目前 TypeScript/Vue 分析仍然是保守实现。下一阶段先建立稳定的 Language Analyzer Contract，再接入 TypeScript Compiler API、Vue `@vue/compiler-sfc` 和更强的原生类型系统分析。
+
+CCE 的目标不是只支持 Go / TypeScript / JavaScript / Vue。未来可以通过 Analyzer Adapter 扩展 Java、Python、C/C++、C#、Rust 等语言，同时复用统一 Facts、Typed Graph、Retrieval 和 MCP。
 
 ## 会生成什么
 
@@ -382,15 +387,19 @@ CLI / MCP / future IDE integrations
 
 详细路线图请查看 [ROADMAP.md](ROADMAP.md)。
 
+WP7 之后的具体执行顺序见 [docs/DEVELOPMENT-PLAN-ZH.md](docs/DEVELOPMENT-PLAN-ZH.md)。
+
 近期计划：
 
-1. 接入 TypeScript Compiler API；
-2. 接入 Vue `@vue/compiler-sfc`；
-3. 扩展 compiler-backed 的 call / import 精确解析能力；
-4. 支持 SCIP 导出；
-5. 建立 graph 正确率、检索质量和增量性能 Benchmark；
-6. 增加语言 Analyzer 插件机制；
-7. 后续可选支持语义排序 Provider，但不会成为核心引擎的必需依赖。
+1. Language Analyzer Architecture & Plugin Contract；
+2. TypeScript Compiler API；
+3. Vue `@vue/compiler-sfc`；
+4. TypeScript / JavaScript module、re-export、path alias 解析；
+5. Go `go/packages` + `go/types`，随后 SSA / callgraph；
+6. 建立 Ground Truth Benchmark、Precision / Recall 和 Retrieval 质量指标；
+7. Contract 稳定后再增加 Java、Python Analyzer；
+8. Schema / Plugin 边界稳定后再推进 SCIP、IDE、Graph Visualization；
+9. 语义/Embedding/LLM Provider 只作为可选插件，不成为核心必需依赖。
 
 ## 非目标
 
