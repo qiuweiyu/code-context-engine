@@ -1,0 +1,11 @@
+{
+  "corpus_version": 1,
+  "case_count": 5,
+  "min_applied_provider_cases": 5,
+  "min_on_hit_at_5_cases": 5,
+  "min_hit_at_3_delta": 2,
+  "min_selected_relevant_delta": 2,
+  "min_mrr_delta": 0.25,
+  "max_compact_bytes_delta": 600,
+  "max_on_median_query_ms_avg": 500
+}

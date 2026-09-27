@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "fixture": "semantic-paraphrase",
+  "maxFiles": 5,
+  "cases": [
+    {
+      "name": "contact-details-paraphrase",
+      "query": "service change the user's email address",
+      "relevantFiles": ["src/services/service-c.js"]
+    },
+    {
+      "name": "homework-distribution-paraphrase",
+      "query": "service give homework to the class",
+      "relevantFiles": ["src/services/service-d.js"]
+    },
+    {
+      "name": "checkout-paraphrase",
+      "query": "service complete the buyer order",
+      "relevantFiles": ["src/services/service-e.js"]
+    },
+    {
+      "name": "session-revocation-paraphrase",
+      "query": "service disable a user's login",
+      "relevantFiles": ["src/services/service-f.js"]
+    },
+    {
+      "name": "learning-summary-paraphrase",
+      "query": "service show a summary of study activity",
+      "relevantFiles": ["src/services/service-g.js"]
+    }
+  ]
+}

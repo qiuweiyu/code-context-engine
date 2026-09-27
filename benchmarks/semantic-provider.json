@@ -1,0 +1,8 @@
+{
+  "protocol": "cce.semantic-provider-spec",
+  "version": "1.0",
+  "command": "node",
+  "args": ["benchmarks/providers/semantic-reference.mjs"],
+  "timeout_ms": 1500,
+  "weight": 0.35
+}

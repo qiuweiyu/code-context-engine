@@ -19,7 +19,9 @@
     "benchmark:gate": "node benchmarks/gate.mjs",
     "index": "node src/cli.js index",
     "query": "node src/cli.js query",
-    "status": "node src/cli.js status"
+    "status": "node src/cli.js status",
+    "benchmark:semantic": "node benchmarks/semantic-run.mjs",
+    "benchmark:semantic:gate": "node benchmarks/semantic-gate.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
