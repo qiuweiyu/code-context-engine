@@ -273,7 +273,38 @@ Protocol v1 同时冻结以下严格 JSON Schema：
 
 JSON Schema 不方便表达的跨记录约束——例如 request candidates 与 response scores 的 path 必须完全一致、禁止重复 path、request_id 必须匹配——仍属于实现层必须执行的校验。
 
-## 12. Protocol v1 不包含
+## 12. CLI 与 MCP 显式启用
+
+确定性 query 路径仍然是默认行为。
+
+CLI：
+
+```bash
+cce query --repo /path/to/repo --task "查找老师发布作业的位置" --semantic-provider /path/to/provider.json
+```
+
+CLI 的 spec 是显式本地文件路径。没有 `--semantic-provider` 时，命令继续使用原有同步确定性 query 路径。
+
+MCP 的 `context_query` 新增可选 `semantic_provider` 字符串：
+
+```json
+{
+  "repo_root": "/path/to/repo",
+  "task": "查找老师发布作业的位置",
+  "semantic_provider": ".cce/semantic-provider.json"
+}
+```
+
+MCP 中 spec 路径相对 `repo_root` 解析，并且必须保持在已授权仓库根目录以内，避免模型生成的工具调用读取主机其他位置的任意 Provider 配置。
+
+只有显式请求 Provider 时，full query 输出才增加 `semantic_refinement`。compact 输出只保留有限状态：
+
+- applied：`{"status":"applied","provider":"<id>"}`
+- fallback：`{"status":"fallback","error_code":"<code>"}`
+
+Provider 未启用时不会新增 semantic 状态字段，从而保持默认确定性序列化兼容。
+
+## 13. Protocol v1 不包含
 
 - 自动 Provider discovery；
 - 自动网络调用；

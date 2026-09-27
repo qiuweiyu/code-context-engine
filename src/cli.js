@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import path from "node:path";
 import { indexRepository } from "./context/indexer.js";
-import { queryContext } from "./context/retriever.js";
+import { queryContext, queryContextWithSemantic } from "./context/retriever.js";
 import { readIndexStatus } from "./context/status.js";
 import { openStore } from "./context/store.js";
 import { reviewFeature } from "./context/features.js";
@@ -11,6 +11,7 @@ import { serializeQueryOutput } from "./context/query-output.js";
 import { exportScipIndex } from "./public/scip.js";
 import { locatePublicNode } from "./public/locate.js";
 import { exportGraphHtml } from "./public/graph-html.js";
+import { loadCliSemanticProviderSpecV1 } from "./semantic/spec-path.js";
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(name);
@@ -26,7 +27,7 @@ function args(name) {
 function has(name) { return process.argv.includes(name); }
 function print(value) { process.stdout.write(JSON.stringify(value, null, 2) + "\n"); }
 function usage() {
-  process.stderr.write(`Code Context Engine v0.1.7\n\nCommands:\n  index --repo <path> [--force]\n  query --repo <path> --task <text> [--max-files 12] [--compact]\n  flow --repo <path> --start <node-id> [--start <node-id>...] [--direction forward|reverse] [--max-hops 3] [--branch-limit 8] [--node-limit 128] [--min-confidence static] [--edge-types entry_handler,api_request,route_handler]\n  locate --repo <path> --node <public-node-id> [--editor vscode|file]\n  graph-html --repo <path> --out <graph.html> [--focus <public-node-id>] [--max-nodes 250] [--max-hops 3]\n  export-scip --repo <path> --out <file.scip> [--repository <name>]\n  status --repo <path>\n  review-feature --repo <path> --feature <id> [--note <text>]\n\nGenerated data lives in <repo>/.context-index. Feature definitions live in <repo>/.context-features/*.json.\n`);
+  process.stderr.write(`Code Context Engine v0.1.7\n\nCommands:\n  index --repo <path> [--force]\n  query --repo <path> --task <text> [--max-files 12] [--compact] [--semantic-provider <spec.json>]\n  flow --repo <path> --start <node-id> [--start <node-id>...] [--direction forward|reverse] [--max-hops 3] [--branch-limit 8] [--node-limit 128] [--min-confidence static] [--edge-types entry_handler,api_request,route_handler]\n  locate --repo <path> --node <public-node-id> [--editor vscode|file]\n  graph-html --repo <path> --out <graph.html> [--focus <public-node-id>] [--max-nodes 250] [--max-hops 3]\n  export-scip --repo <path> --out <file.scip> [--repository <name>]\n  status --repo <path>\n  review-feature --repo <path> --feature <id> [--note <text>]\n\nGenerated data lives in <repo>/.context-index. Feature definitions live in <repo>/.context-features/*.json.\n`);
 }
 
 const cmd = process.argv[2];
@@ -37,7 +38,16 @@ try {
   if (cmd === "index") print(await indexRepository({ repoRoot: repo, force: has("--force") }));
   else if (cmd === "query") {
     const task = arg("--task"); if (!task) throw new Error("--task is required");
-    const result = queryContext({ repoRoot: repo, task, maxFiles: Number(arg("--max-files", "12")) });
+    const maxFiles = Number(arg("--max-files", "12"));
+    const semanticProviderPath = arg("--semantic-provider");
+    const result = semanticProviderPath
+      ? await queryContextWithSemantic({
+        repoRoot: repo,
+        task,
+        maxFiles,
+        semanticProviderSpec: loadCliSemanticProviderSpecV1(semanticProviderPath)
+      })
+      : queryContext({ repoRoot: repo, task, maxFiles });
     process.stdout.write(serializeQueryOutput(result, { compact: has("--compact") }) + "\n");
   } else if (cmd === "flow") {
     const starts = args("--start");

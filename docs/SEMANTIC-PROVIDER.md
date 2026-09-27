@@ -267,7 +267,38 @@ Protocol v1 is accompanied by strict JSON Schemas:
 
 Cross-record invariants that JSON Schema does not express conveniently — such as exact candidate/score path equality, duplicate path rejection and matching request IDs — remain mandatory validator logic in the implementation.
 
-## 12. Out of scope for Protocol v1
+## 12. CLI and MCP opt-in
+
+The deterministic query path remains the default.
+
+CLI:
+
+```bash
+cce query --repo /path/to/repo --task "find homework publishing" --semantic-provider /path/to/provider.json
+```
+
+The CLI spec path is an explicit local file path. When `--semantic-provider` is absent, the command uses the original synchronous deterministic query path.
+
+MCP `context_query` accepts an optional `semantic_provider` string:
+
+```json
+{
+  "repo_root": "/path/to/repo",
+  "task": "find homework publishing",
+  "semantic_provider": ".cce/semantic-provider.json"
+}
+```
+
+For MCP, the spec path is resolved relative to `repo_root` and MUST remain inside that authorized repository root. This prevents a model-generated tool call from reading an arbitrary provider spec elsewhere on the host.
+
+Full query output includes `semantic_refinement` only when a provider was explicitly requested. Compact output exposes only bounded status:
+
+- applied: `{"status":"applied","provider":"<id>"}`
+- fallback: `{"status":"fallback","error_code":"<code>"}`
+
+Provider-disabled output does not gain a semantic status field, preserving the deterministic default serialization.
+
+## 13. Out of scope for Protocol v1
 
 - automatic provider discovery;
 - automatic network calls;
