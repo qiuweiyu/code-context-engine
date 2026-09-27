@@ -12,11 +12,12 @@ test("ground-truth baseline records compiler resolution gains and conservative m
     maxBuffer: 1024 * 1024
   });
   const report = JSON.parse(stdout);
-  assert.equal(report.corpus_version, 3);
-  assert.equal(report.cases.length, 11);
+  assert.equal(report.corpus_version, 4);
+  assert.equal(report.cases.length, 12);
   const [
     flow, barrel, dualVue, goAmbiguous, comments, routeAmbiguous,
-    tsAlias, jsAlias, reexportConflict, dynamicImport, vueComponentComposable
+    tsAlias, jsAlias, reexportConflict, dynamicImport, vueComponentComposable,
+    goPackagesTypes
   ] = report.cases;
   assert.equal(flow.name, "vue-ts-go-http");
   assert.deepEqual(
@@ -41,19 +42,21 @@ test("ground-truth baseline records compiler resolution gains and conservative m
     [1, 0]
   );
   for (const item of [
-    tsAlias, jsAlias, reexportConflict, dynamicImport, vueComponentComposable
+    tsAlias, jsAlias, reexportConflict, dynamicImport, vueComponentComposable,
+    goPackagesTypes
   ]) {
     assert.equal(item.labeled_edges.fp, 0);
     assert.equal(item.labeled_edges.fn, 0);
   }
   assert.equal(vueComponentComposable.retrieval.hit_at_3, 3);
+  assert.equal(goPackagesTypes.retrieval.hit_at_3, 2);
   const totals = report.cases.reduce((acc, item) => {
     acc.tp += item.labeled_edges.tp;
     acc.fp += item.labeled_edges.fp;
     acc.fn += item.labeled_edges.fn;
     return acc;
   }, { tp: 0, fp: 0, fn: 0 });
-  assert.deepEqual(totals, { tp: 20, fp: 1, fn: 0 });
+  assert.deepEqual(totals, { tp: 23, fp: 1, fn: 0 });
   for (const item of report.cases) {
     assert.equal(item.indexing.warm_changed, 0);
     assert.equal(item.indexing.warm_skipped, item.indexing.first_changed);

@@ -38,7 +38,7 @@ function symbols(root) {
 
 test("internal contract selects analyzers and attaches per-fact provenance", async () => {
   assert.equal(ANALYZER_CONTRACT_VERSION, 1);
-  assert.equal(analyzerFor("go").id, "go-ast");
+  assert.equal(analyzerFor("go").id, "go-packages-types");
   assert.equal(analyzerFor("python").id, "text-facts");
   assert.equal(analyzerFor("typescript").capabilities.exactResolution, "static");
   const item = {
@@ -60,7 +60,7 @@ test("analyzer version invalidation touches only that language", async () => {
   try {
     const first = await indexRepository({ repoRoot: root });
     assert.equal(first.changed_files, 2);
-    const registry = createAnalyzerRegistry({ goVersion: "2" });
+    const registry = createAnalyzerRegistry({ goVersion: "3" });
     const second = await indexRepository({ repoRoot: root, analyzerRegistry: registry });
     assert.equal(second.changed_files, 1);
     assert.equal(second.skipped_files, 1);

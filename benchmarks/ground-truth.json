@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "cases": [
     {
       "name": "vue-ts-go-http",
@@ -355,6 +355,42 @@
           "type": "call",
           "from": "symbol:vue:src/pages/Dashboard.vue::loadUsers",
           "to": "ref:call:useUsers",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "go-packages-types-cross-package",
+      "fixture": "go-packages-types",
+      "query": "Generic Fetch Reader Box",
+      "maxFiles": 5,
+      "relevantFiles": [
+        "service/service.go",
+        "store/store.go"
+      ],
+      "edges": [
+        {
+          "type": "call",
+          "from": "symbol:go:service/service.go::Load",
+          "to": "symbol:go:store/store.go::Fetch",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:go:service/service.go::Generic",
+          "to": "symbol:go:store/store.go::NewBox",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:go:service/service.go::Generic",
+          "to": "symbol:go:store/store.go::Box[T].Get",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:go:service/service.go::ViaInterface",
+          "to": "symbol:go:store/store.go::FileReader.Read",
           "present": false
         }
       ]

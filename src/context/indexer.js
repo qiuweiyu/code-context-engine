@@ -287,6 +287,26 @@ function resolveDependencies(db) {
       continue;
     }
 
+    if (metadata.go_types_checked === true) {
+      const goResolved = dep.resolved_symbol_id && symbolIds.has(dep.resolved_symbol_id)
+        ? dep.resolved_symbol_id
+        : null;
+      const goResolution = goResolved
+        ? (metadata.resolution ?? "go_types_object")
+        : (metadata.resolution === "go_types_object"
+          ? "go_types_target_missing"
+          : (metadata.resolution ?? "go_types_call_unresolved"));
+      update.run(
+        goResolved,
+        JSON.stringify({
+          ...metadata,
+          resolution: goResolution
+        }),
+        dep.id
+      );
+      continue;
+    }
+
     const vueImported = resolveVueImportedCall(
       dep, raw, vueImportBindings, symbolsByFile
     );
@@ -489,6 +509,12 @@ function canAffectVueModuleResolution(language) {
     || language === "vue";
 }
 
+function isGoProjectConfig(relPath) {
+  return /(?:^|\/)(?:go\.mod|go\.sum|go\.work|go\.work\.sum)$/i.test(
+    String(relPath ?? "").replaceAll("\\", "/")
+  );
+}
+
 function isCompilerProjectConfig(relPath) {
   return /(?:^|\/)(?:tsconfig|jsconfig)(?:\.[^/]*)?\.json$/i.test(
     String(relPath ?? "").replaceAll("\\", "/")
@@ -532,6 +558,10 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
     const pendingMap = new Map();
     const skippedPaths = new Set();
     const compilerSeeds = [];
+    const goTypedProject = tracked.some((relPath) =>
+      /(?:^|\/)(?:go\.mod|go\.work)$/.test(relPath)
+    );
+    let goTypeGraphChanged = removed.some(isGoProjectConfig);
     let compilerStructureChanged = false;
     let vueStructureChanged = false;
     let compilerConfigChanged = removed.some(isCompilerProjectConfig);
@@ -571,6 +601,12 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
       }
       pendingMap.set(relPath, item);
       if (isCompilerProjectConfig(relPath) && contentChanged) compilerConfigChanged = true;
+      if (isGoProjectConfig(relPath) && contentChanged) {
+        goTypeGraphChanged = true;
+      }
+      if (language === "go" && contentChanged && goTypedProject) {
+        goTypeGraphChanged = true;
+      }
       if (isCompilerScriptLanguage(language) && contentChanged) {
         compilerSeeds.push(relPath);
         if (!old) compilerStructureChanged = true;
@@ -582,8 +618,17 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
 
     for (const filePath of removed) {
       const oldLanguage = db.prepare("SELECT language FROM files WHERE path=?").get(filePath)?.language;
+      if (oldLanguage === "go" && goTypedProject) goTypeGraphChanged = true;
       if (isCompilerScriptLanguage(oldLanguage)) compilerSeeds.push(filePath);
       if (canAffectVueModuleResolution(oldLanguage)) vueStructureChanged = true;
+    }
+
+    if (goTypeGraphChanged) {
+      for (const item of snapshots.values()) {
+        if (item.language !== "go") continue;
+        pendingMap.set(item.relPath, item);
+        skippedPaths.delete(item.relPath);
+      }
     }
 
     if (compilerConfigChanged || compilerStructureChanged) {
