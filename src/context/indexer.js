@@ -51,7 +51,7 @@ function insertAnalysis(db, relPath, language, hash, text, analysis, now) {
       dep.relation,
       dep.to_ref,
       dep.to_file ?? null,
-      null,
+      dep.resolved_symbol_id ?? null,
       JSON.stringify(dep.metadata ?? {})
     );
   }
@@ -152,6 +152,7 @@ function resolveDependencies(db) {
   const byQualified = new Map();
   const byName = new Map();
   const receiverGroups = new Map();
+  const symbolIds = new Set(symbols.map((symbol) => symbol.symbol_id));
 
   for (const symbol of symbols) {
     if (!byQualified.has(symbol.qualified_name)) byQualified.set(symbol.qualified_name, []);
@@ -179,7 +180,7 @@ function resolveDependencies(db) {
   }
 
   const deps = db.prepare(
-    `SELECT d.id,d.from_file,d.to_ref,d.metadata_json,
+    `SELECT d.id,d.from_file,d.to_ref,d.resolved_symbol_id,d.metadata_json,
             COALESCE(f.is_test,0) AS is_test,f.language AS from_language,f.package_name AS from_package_name
        FROM dependencies d
        LEFT JOIN files f ON f.path=d.from_file
@@ -193,6 +194,20 @@ function resolveDependencies(db) {
   for (const dep of deps) {
     const raw = String(dep.to_ref ?? "");
     const metadata = parseJson(dep.metadata_json, {});
+    if (metadata.compiler_checked === true) {
+      const compilerResolved = dep.resolved_symbol_id && symbolIds.has(dep.resolved_symbol_id)
+        ? dep.resolved_symbol_id
+        : null;
+      update.run(
+        compilerResolved,
+        JSON.stringify({
+          ...metadata,
+          resolution: compilerResolved ? (metadata.resolution ?? "ts_type_checker") : "ts_call_unresolved"
+        }),
+        dep.id
+      );
+      continue;
+    }
     const tail = raw.split(".").pop();
     const exact = (byQualified.get(raw) ?? [])
       .filter((candidate) => callCandidateInScope(dep, candidate));
@@ -361,6 +376,36 @@ function markOldFeatureRefs(db, filePath, oldSymbols, newSymbolMap, now) {
   markFeaturesForSymbolChange(db, changedIds);
 }
 
+function isCompilerScriptLanguage(language) {
+  return language === "typescript" || language === "javascript";
+}
+
+function isCompilerProjectConfig(relPath) {
+  return /(?:^|\/)(?:tsconfig|jsconfig)(?:\.[^/]*)?\.json$/i.test(
+    String(relPath ?? "").replaceAll("\\", "/")
+  );
+}
+
+function addCompilerReverseInvalidations(db, seeds, snapshots, pendingMap, skippedPaths) {
+  const queue = [...new Set(seeds)];
+  const seen = new Set();
+  const reverse = db.prepare(
+    "SELECT DISTINCT from_file FROM dependencies WHERE relation='imports' AND to_file=? ORDER BY from_file"
+  );
+  while (queue.length) {
+    const target = queue.shift();
+    if (seen.has(target)) continue;
+    seen.add(target);
+    for (const row of reverse.all(target)) {
+      const item = snapshots.get(row.from_file);
+      if (!item || !isCompilerScriptLanguage(item.language)) continue;
+      if (!pendingMap.has(item.relPath)) pendingMap.set(item.relPath, item);
+      skippedPaths.delete(item.relPath);
+      queue.push(item.relPath);
+    }
+  }
+}
+
 export async function indexRepository({ repoRoot, indexDir = ".context-index", force = false, analyzerRegistry = DEFAULT_ANALYZERS } = {}) {
   const gitRoot = await resolveGitRoot(repoRoot);
   const outDir = path.isAbsolute(indexDir) ? indexDir : path.join(gitRoot, indexDir);
@@ -372,9 +417,14 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
     const existing = db.prepare("SELECT path,content_hash,parser_version FROM files").all();
     const existingMap = new Map(existing.map((r)=>[r.path,r]));
     const removed = existing.filter((r)=>!trackedSet.has(r.path)).map((r)=>r.path);
-    let changed = 0, skipped = 0, unreadable = 0;
+    let changed = 0, unreadable = 0;
     const unreadableDiagnostics = [];
-    const pending = [];
+    const snapshots = new Map();
+    const pendingMap = new Map();
+    const skippedPaths = new Set();
+    const compilerSeeds = [];
+    let compilerStructureChanged = false;
+    let compilerConfigChanged = removed.some(isCompilerProjectConfig);
 
     for (const relPath of tracked) {
       let text;
@@ -400,13 +450,40 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
       const contentHash = sha256Text(text);
       const old = existingMap.get(relPath);
       const language = detectLanguage(relPath);
-      if (!force && old?.content_hash === contentHash
-        && old?.parser_version === parserVersionFor(language, analyzerRegistry)) {
-        skipped++;
+      const item = { relPath, text, contentHash, language };
+      snapshots.set(relPath, item);
+      const parserVersion = parserVersionFor(language, analyzerRegistry);
+      const contentChanged = old?.content_hash !== contentHash;
+      const parserChanged = old?.parser_version !== parserVersion;
+      if (!force && !contentChanged && !parserChanged) {
+        skippedPaths.add(relPath);
         continue;
       }
-      pending.push({ relPath, text, contentHash, language });
+      pendingMap.set(relPath, item);
+      if (isCompilerProjectConfig(relPath) && contentChanged) compilerConfigChanged = true;
+      if (isCompilerScriptLanguage(language) && contentChanged) {
+        compilerSeeds.push(relPath);
+        if (!old) compilerStructureChanged = true;
+      }
     }
+
+    for (const filePath of removed) {
+      const oldLanguage = db.prepare("SELECT language FROM files WHERE path=?").get(filePath)?.language;
+      if (isCompilerScriptLanguage(oldLanguage)) compilerSeeds.push(filePath);
+    }
+
+    if (compilerConfigChanged || compilerStructureChanged) {
+      for (const item of snapshots.values()) {
+        if (!isCompilerScriptLanguage(item.language)) continue;
+        pendingMap.set(item.relPath, item);
+        skippedPaths.delete(item.relPath);
+      }
+    } else {
+      addCompilerReverseInvalidations(
+        db, compilerSeeds, snapshots, pendingMap, skippedPaths
+      );
+    }
+    const pending = [...pendingMap.values()];
 
     const analyzed = await analyzePendingFiles({
       repoRoot: gitRoot, pending, trackedSet, registry: analyzerRegistry
@@ -453,7 +530,7 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
     db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)")
       .run("analysis_diagnostics", JSON.stringify(analyzed.diagnostics));
     const manifest = await exportIndex(db, outDir);
-    return { ok: true, repository: gitRoot, index_dir: outDir, database: dbPath, changed_files: changed, skipped_files: skipped, removed_files: removed.length, unreadable_files: unreadable, analysis_failed_files: analyzed.diagnostics.filter((entry) => entry.status !== "complete").length, diagnostics: analyzed.diagnostics, feature_definitions: definitions.length, manifest };
+    return { ok: true, repository: gitRoot, index_dir: outDir, database: dbPath, changed_files: changed, skipped_files: skippedPaths.size, removed_files: removed.length, unreadable_files: unreadable, analysis_failed_files: analyzed.diagnostics.filter((entry) => entry.status !== "complete").length, diagnostics: analyzed.diagnostics, feature_definitions: definitions.length, manifest };
   } finally {
     db.close();
   }

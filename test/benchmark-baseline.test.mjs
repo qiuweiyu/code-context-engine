@@ -5,15 +5,19 @@ import { promisify } from "node:util";
 
 const exec = promisify(execFile);
 
-test("ground-truth baseline records both a resolved flow and a known barrel miss", async () => {
+test("ground-truth baseline records compiler resolution gains and conservative misses", async () => {
   const { stdout } = await exec(process.execPath, ["benchmarks/run.mjs"], {
     cwd: new URL("..", import.meta.url),
     timeout: 120000,
     maxBuffer: 1024 * 1024
   });
   const report = JSON.parse(stdout);
-  assert.equal(report.corpus_version, 1);
-  const [flow, barrel, dualVue, goAmbiguous, comments, routeAmbiguous] = report.cases;
+  assert.equal(report.corpus_version, 2);
+  assert.equal(report.cases.length, 10);
+  const [
+    flow, barrel, dualVue, goAmbiguous, comments, routeAmbiguous,
+    tsAlias, jsAlias, reexportConflict, dynamicImport
+  ] = report.cases;
   assert.equal(flow.name, "vue-ts-go-http");
   assert.deepEqual(
     [flow.labeled_edges.tp, flow.labeled_edges.fp, flow.labeled_edges.fn],
@@ -21,15 +25,29 @@ test("ground-truth baseline records both a resolved flow and a known barrel miss
   );
   assert.equal(flow.retrieval.hit_at_3, 3);
   assert.equal(barrel.name, "ts-barrel-vue-page");
-  assert.equal(barrel.labeled_edges.fn, 1);
+  assert.deepEqual(
+    [barrel.labeled_edges.tp, barrel.labeled_edges.fp, barrel.labeled_edges.fn],
+    [1, 0, 0]
+  );
   assert.equal(barrel.retrieval.hit_at_3, 2);
   assert.equal(dualVue.labeled_edges.fn, 1);
   assert.equal(goAmbiguous.labeled_edges.fp, 0);
-  assert.equal(comments.labeled_edges.fp, 2);
+  assert.equal(comments.labeled_edges.fp, 1);
   assert.deepEqual(
     [routeAmbiguous.labeled_edges.tp, routeAmbiguous.labeled_edges.fp],
     [1, 0]
   );
+  for (const item of [tsAlias, jsAlias, reexportConflict, dynamicImport]) {
+    assert.equal(item.labeled_edges.fp, 0);
+    assert.equal(item.labeled_edges.fn, 0);
+  }
+  const totals = report.cases.reduce((acc, item) => {
+    acc.tp += item.labeled_edges.tp;
+    acc.fp += item.labeled_edges.fp;
+    acc.fn += item.labeled_edges.fn;
+    return acc;
+  }, { tp: 0, fp: 0, fn: 0 });
+  assert.deepEqual(totals, { tp: 16, fp: 1, fn: 1 });
   for (const item of report.cases) {
     assert.equal(item.indexing.warm_changed, 0);
     assert.equal(item.indexing.warm_skipped, item.indexing.first_changed);

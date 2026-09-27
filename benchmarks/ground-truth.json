@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "cases": [
     {
       "name": "vue-ts-go-http",
@@ -190,6 +190,134 @@
           "type": "api_request",
           "from": "symbol:typescript:src/api/items.ts::loadItems",
           "to": "route:server:POST:/api/items",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "ts-path-alias-call",
+      "fixture": "ts-path-alias",
+      "query": "loadUsers fetchUsers",
+      "maxFiles": 5,
+      "relevantFiles": [
+        "src/feature/load.ts",
+        "src/api/users.ts"
+      ],
+      "edges": [
+        {
+          "type": "import",
+          "from": "file:src/feature/load.ts",
+          "to": "file:src/api/users.ts",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:typescript:src/feature/load.ts::loadUsers",
+          "to": "symbol:typescript:src/api/users.ts::fetchUsers",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:typescript:src/feature/load.ts::loadUsers",
+          "to": "symbol:typescript:src/noise/users.ts::fetchUsers",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "js-path-alias-call",
+      "fixture": "js-path-alias",
+      "query": "run listItems",
+      "maxFiles": 5,
+      "relevantFiles": [
+        "src/app.js",
+        "src/lib/api.js"
+      ],
+      "edges": [
+        {
+          "type": "import",
+          "from": "file:src/app.js",
+          "to": "file:src/lib/api.js",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:javascript:src/app.js::run",
+          "to": "symbol:javascript:src/lib/api.js::listItems",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:javascript:src/app.js::run",
+          "to": "symbol:javascript:src/noise/api.js::listItems",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "ts-reexport-conflict",
+      "fixture": "ts-reexport-conflict",
+      "query": "run shared",
+      "maxFiles": 6,
+      "relevantFiles": [
+        "src/use.ts",
+        "src/index.ts",
+        "src/a.ts",
+        "src/b.ts"
+      ],
+      "edges": [
+        {
+          "type": "call",
+          "from": "symbol:typescript:src/use.ts::run",
+          "to": "ref:call:shared",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:typescript:src/use.ts::run",
+          "to": "symbol:typescript:src/a.ts::shared",
+          "present": false
+        },
+        {
+          "type": "call",
+          "from": "symbol:typescript:src/use.ts::run",
+          "to": "symbol:typescript:src/b.ts::shared",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "dynamic-import-unresolved",
+      "fixture": "dynamic-import",
+      "query": "load target go",
+      "maxFiles": 5,
+      "relevantFiles": [
+        "src/loader.ts",
+        "src/target.ts"
+      ],
+      "edges": [
+        {
+          "type": "import",
+          "from": "file:src/loader.ts",
+          "to": "ref:import:./target",
+          "present": true
+        },
+        {
+          "type": "import",
+          "from": "file:src/loader.ts",
+          "to": "file:src/target.ts",
+          "present": false
+        },
+        {
+          "type": "call",
+          "from": "symbol:typescript:src/loader.ts::load",
+          "to": "ref:call:mod.go",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:typescript:src/loader.ts::load",
+          "to": "symbol:typescript:src/target.ts::go",
           "present": false
         }
       ]

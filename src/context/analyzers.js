@@ -1,5 +1,6 @@
 import { analyzeGoFiles } from "./go-runner.js";
 import { analyzeScriptFile } from "./analyze-script.js";
+import { analyzeTypeScriptFiles, TYPESCRIPT_ANALYZER_VERSION } from "./analyze-typescript.js";
 import { extractDbObjects, extractRoutes } from "./analyze-common.js";
 import { PARSER_VERSION } from "./schema.js";
 
@@ -19,10 +20,14 @@ function descriptor(id, languages, version, evidence, capabilities, analyze) {
 
 export function createAnalyzerRegistry({
   goVersion = "1",
-  scriptVersion = "1",
+  scriptVersion = TYPESCRIPT_ANALYZER_VERSION,
+  vueVersion = "1",
   textVersion = "1",
   goAnalyze = ({ repoRoot, items }) => analyzeGoFiles(repoRoot, items.map((item) => item.relPath)),
-  scriptAnalyze = ({ items, trackedSet }) => new Map(items.map((item) => [
+  scriptAnalyze = ({ repoRoot, items, trackedSet }) => analyzeTypeScriptFiles({
+    repoRoot, items, trackedSet
+  }),
+  vueAnalyze = ({ items, trackedSet }) => new Map(items.map((item) => [
     item.relPath, analyzeScriptFile({
       text: item.text, relPath: item.relPath,
       language: item.language, trackedSet
@@ -33,9 +38,12 @@ export function createAnalyzerRegistry({
     descriptor("go-ast", ["go"], goVersion, "ast",
       { symbols: "static", imports: "static", calls: "static", types: "heuristic", exactResolution: "unsupported" },
       goAnalyze),
-    descriptor("script-regex", ["typescript", "javascript", "vue"], scriptVersion, "text",
-      { symbols: "heuristic", imports: "heuristic", calls: "heuristic", types: "unsupported", exactResolution: "unsupported" },
+    descriptor("typescript-compiler", ["typescript", "javascript"], scriptVersion, "ast",
+      { symbols: "static", imports: "static", calls: "static", types: "static", exactResolution: "static" },
       scriptAnalyze),
+    descriptor("script-regex", ["vue"], vueVersion, "text",
+      { symbols: "heuristic", imports: "heuristic", calls: "heuristic", types: "unsupported", exactResolution: "unsupported" },
+      vueAnalyze),
     descriptor("text-facts", ["*"], textVersion, "text",
       { symbols: "unsupported", imports: "unsupported", calls: "unsupported", routes: "heuristic", database: "heuristic" },
       ({ items }) => new Map(items.map((item) => [

@@ -1,0 +1,1 @@
+{"compilerOptions":{"baseUrl":".","paths":{"@api/*":["src/api/*"]},"module":"ESNext","moduleResolution":"Bundler"}}

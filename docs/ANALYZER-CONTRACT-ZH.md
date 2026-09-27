@@ -1,6 +1,6 @@
 # 内部语言分析器契约（WP8-B）
 
-版本 1，代码位于 `src/context/analyzers.js`。这是 CCE 内部接口，**不是**对外承诺兼容的插件 API。现有 Go AST、TS/JS 正则和 Vue script 提取仍然负责实际解析；`text-facts` 负责没有专用分析器的已跟踪文件。
+版本 1，代码位于 `src/context/analyzers.js`。这是 CCE 内部接口，**不是**对外承诺兼容的插件 API。Go 继续使用 Go AST；WP9 将已跟踪 TypeScript/JavaScript 切换到 TypeScript Compiler API 分析器，Vue 在 WP10 前仍保留原有 script-regex 路径；`text-facts` 负责没有专用分析器的已跟踪文件。WP9 精确固定 `typescript@6.0.3`，因为当前 TypeScript 7 系列未提供本分析器依赖的稳定 Program/TypeChecker API。
 
 ## 调度与产出
 
@@ -16,6 +16,6 @@ schema 8 的原有列、符号 ID、图边、遍历和检索排序没有换版�
 
 ## 版本与下一步
 
-`files.parser_version` 现在使用 `<全局解析版本>/contract1/<分析器ID>@<分析器版本>`。旧 v0.1.7 索引将**一次性重新索引**；之后只升级 Go 分析器时，不需要重扫未变化的 TS 文件。通用路由/DB 规则变化需升级全局或契约版本；仅修改跨文件解析/图规则，仍需明确重建图，不能只靠分析器版本。
+`files.parser_version` 使用 `<全局解析版本>/contract1/<分析器ID>@<分析器版本>`；分析器版本变化仍只使对应分析器文件失效。WP9 进一步把 TS/JS 模块解析视为跨文件状态：脚本内容变化会沿已记录的 import 反向链传递失效；新增脚本，或 `tsconfig`/`jsconfig` 修改、删除时，会使本轮已跟踪的 compiler-script 集合重新分析。hash、解析器版本和配置都不变时，warm index 仍应为 0 changed。通用路由/DB 规则变化仍需升级全局或契约版本。
 
 新语言适配器要给出真实能力、确定性版本、路径归属与 unresolved 依据，并为成功和失败路径添加 Ground Truth。Java/Python/C++ 编译器集成以及对外插件 ABI 属于后续工作包。验收运行 `npm test`、`npm run benchmark`；WP8-A 的已知漏检和误连仍是对照基线，默认 Benchmark 报告指标，不以这些已知问题阻断 WP8-B。

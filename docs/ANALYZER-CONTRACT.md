@@ -1,6 +1,6 @@
 # Internal Language Analyzer Contract (WP8-B)
 
-This is an **internal** boundary, version 1, implemented in `src/context/analyzers.js`. It is not a public plugin ABI. Existing Go AST, TS/JS regex and Vue script extraction remain the producers. `text-facts` is the fallback for tracked files without a dedicated analyzer, including SQL and future language extensions.
+This is an **internal** boundary, version 1, implemented in `src/context/analyzers.js`. It is not a public plugin ABI. Go remains on the Go AST analyzer; WP9 moves tracked TypeScript/JavaScript to a TypeScript Compiler API analyzer while Vue remains on the existing script-regex path until WP10. `text-facts` is the fallback for tracked files without a dedicated analyzer, including SQL and future language extensions. WP9 pins `typescript@6.0.3` because the TypeScript 7 line does not currently expose the stable Program/TypeChecker API used by this analyzer.
 
 ## Dispatch and facts
 
@@ -23,7 +23,7 @@ An unreadable source, analyzer exception, Go parser error, missing result, malfo
 
 ## Incremental versions
 
-The existing `files.parser_version` column now contains `<global parser version>/contract1/<analyzer ID>@<analyzer version>`. This causes a **one-time reindex** of old v0.1.7 files when they are next indexed. Afterwards, changing only the Go analyzer version reindexes Go files, not unchanged TS files. Changes to the shared route/DB text extractor or normalized contract should bump the global parser or contract version because they affect multiple languages. Resolver/edge-only changes still need an explicit graph rebuild or force reindex; analyzer-specific versions alone cannot invalidate cross-file graph semantics.
+The existing `files.parser_version` column contains `<global parser version>/contract1/<analyzer ID>@<analyzer version>`. Analyzer-version changes still invalidate only that analyzer's files. WP9 additionally treats TypeScript/JavaScript resolution as cross-file state: a changed script invalidates tracked TS/JS reverse importers transitively, while a new script or a changed/removed `tsconfig`/`jsconfig` invalidates the tracked compiler-script set for that project pass. Warm indexes remain unchanged when hashes, parser versions and configuration are stable. Changes to the shared route/DB text extractor or normalized contract should still bump the global parser or contract version because they affect multiple languages.
 
 ## Adding an analyzer later
 
