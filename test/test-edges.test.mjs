@@ -65,7 +65,7 @@ test("test mappings become typed test_of edges with conservative confidence", as
     await git(root, "commit", "-qm", "init");
 
     const result = await indexRepository({ repoRoot: root });
-    assert.equal(result.manifest.schema_version, 8);
+    assert.equal(result.manifest.schema_version, 9);
 
     const db = new DatabaseSync(path.join(root, ".context-index/index.sqlite"));
     try {

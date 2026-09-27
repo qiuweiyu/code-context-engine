@@ -23,12 +23,12 @@ Metrics:
 - Cold/warm indexing and query timings are rough local wall times. Compare on the same machine/runtime, with multiple repetitions for formal performance gates.
 - Full/Compact byte counts are minified JSON serialization sizes, not tokenizer-specific token counts.
 
-## WP13 CI quality gate
+## CI quality gate
 
-`npm run benchmark:gate` reads `benchmarks/quality-gate.json`. The frozen v5 thresholds are deliberately broad enough for hosted-runner noise while still catching correctness regressions and order-of-magnitude performance/output growth:
+`npm run benchmark:gate` reads `benchmarks/quality-gate.json`. WP13 introduced the gate; WP14 advances the frozen corpus to v6 while keeping the same deliberately broad hosted-runner performance ceilings:
 
-- corpus version = 5 and case count = 14;
-- TP >= 26, FP <= 1, FN = 0;
+- corpus version = 6 and case count = 16;
+- TP >= 34, FP <= 1, FN = 0;
 - every case must have `warm_changed=0` and `coverage_status=sufficient`;
 - relevant Hit@5 ratio >= 0.66;
 - Compact output must be smaller than Full, Compact/Full <= 0.50, and total Compact bytes <= 10,000;
@@ -36,7 +36,7 @@ Metrics:
 
 The performance ceilings are **regression alarms**, not service-level objectives. Compare detailed timings only on the same OS/runtime; CI runs this timing gate on Ubuntu while Windows remains a functional compatibility job.
 
-Current frozen corpus v5 (fourteen deliberately small cases):
+Current frozen corpus v6 (sixteen deliberately small cases):
 
 | Case | Positive edges found | Negative edges absent | Retrieval | Known limit / purpose |
 | --- | ---: | ---: | --- | --- |
@@ -54,7 +54,9 @@ Current frozen corpus v5 (fourteen deliberately small cases):
 | `go-packages-types-cross-package` | 3/3 | 1/1 | relevant Hit@3 2/2 | WP11 resolves cross-package function/generic calls while interface dispatch stays unresolved |
 | `go-workspace-cross-module` | 1/1 | 1/1 | relevant Hit@3 2/2 | WP13 resolves a tracked dependency through a multi-module `go.work` graph without linking same-name noise |
 | `ts-multi-config-isolation` | 2/2 | 2/2 | relevant Hit@5 4/4 | Two project-local tsconfigs use the same alias and must stay isolated |
+| `go-non-http-entry-flow` | 6/6 | 2/2 | relevant Hit@5 1/1 | WP14 traces Go CLI, cron job and consumer entries through handlers into call/DB facts |
+| `ts-non-http-entry-flow` | 2/2 | 2/2 | relevant Hit@5 1/1 | WP14 resolves TS scheduled/queue handlers and ignores commented pseudo-registrations |
 
-Across v5 labeled facts the measured total is TP=26, FP=1, FN=0 (precision 26/27 and recall 1.0 on this labeled universe only). WP13 adds one Go workspace cross-module positive plus two TypeScript multi-config positives, with no new labeled false positive. The pre-existing single false positive is still the separate comment/text-pattern case. These small fixtures are not product-wide accuracy estimates.
+Across v6 labeled facts the measured total is TP=34, FP=1, FN=0 (precision 34/35 and recall 1.0 on this labeled universe only). WP14 adds eight labeled non-HTTP entry-flow positives and four negative controls with no new labeled false positive. The pre-existing single false positive is still the separate comment/text-pattern case. These small fixtures are not product-wide accuracy estimates.
 
-The original six cases remain the WP8-A comparison baseline; WP9 adds TS/JS aliases, re-export conflict and dynamic-import conservatism; WP10 adds compiler-sfc dual-script/setup and component/composable evidence; WP11 adds package-aware Go function/generic evidence and an interface-dispatch negative control; WP13 adds multi-module Go workspace and multi-config TypeScript isolation. Later packages should add broader build-tag/workspace variants, constructed SQL, partial project configuration and larger real-repository labels. Freeze each fixture and expected evidence before implementing the corresponding parser change. SGC real-project queries should be version pinned and evaluated separately with permission to use that repository, never checked into CCE as copied source.
+The original six cases remain the WP8-A comparison baseline; WP9 adds TS/JS aliases, re-export conflict and dynamic-import conservatism; WP10 adds compiler-sfc dual-script/setup and component/composable evidence; WP11 adds package-aware Go function/generic evidence and an interface-dispatch negative control; WP13 adds multi-module Go workspace and multi-config TypeScript isolation; WP14 adds CLI/job/consumer entry-handler flows. Later packages should add broader build-tag/workspace variants, constructed SQL, partial project configuration and larger real-repository labels. Freeze each fixture and expected evidence before implementing the corresponding parser change. SGC real-project queries should be version pinned and evaluated separately with permission to use that repository, never checked into CCE as copied source.

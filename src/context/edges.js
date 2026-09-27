@@ -1,4 +1,5 @@
 export const EDGE_TYPES = Object.freeze([
+  "entry_handler",
   "call",
   "import",
   "route_handler",
@@ -608,6 +609,131 @@ export function rebuildApiRequestEdges(db) {
       JSON.stringify(evidence),
       "client_route",
       client.id
+    );
+  }
+}
+
+
+function entryHandlerResolution(db, entry, symbolsByName, symbolIds) {
+  if (entry.handler_symbol_id && symbolIds.has(entry.handler_symbol_id)) {
+    return {
+      symbol_id: entry.handler_symbol_id,
+      confidence: "static",
+      resolution: "direct_entry_symbol"
+    };
+  }
+
+  const raw = String(entry.handler_ref ?? "").trim();
+  if (!raw) {
+    return {
+      symbol_id: null,
+      confidence: "unresolved",
+      resolution: "entry_handler_reference_missing"
+    };
+  }
+  if (raw.includes(".")) {
+    return {
+      symbol_id: null,
+      confidence: "unresolved",
+      resolution: "entry_qualified_handler_unresolved"
+    };
+  }
+
+  const source = db.prepare(
+    "SELECT language,package_name FROM files WHERE path=?"
+  ).get(entry.file_path);
+  const candidates = (symbolsByName.get(raw) ?? []).filter((symbol) => {
+    if (symbol.file_path === entry.file_path) return true;
+    if (source?.language !== "go" || symbol.language !== "go") return false;
+    const fromDir = String(entry.file_path).replaceAll("\\", "/").split("/").slice(0, -1).join("/");
+    const targetDir = String(symbol.file_path).replaceAll("\\", "/").split("/").slice(0, -1).join("/");
+    return fromDir === targetDir
+      && Boolean(source.package_name)
+      && symbol.package_name === source.package_name;
+  });
+
+  if (candidates.length === 1) {
+    return {
+      symbol_id: candidates[0].symbol_id,
+      confidence: "static",
+      resolution: candidates[0].file_path === entry.file_path
+        ? "entry_same_file_symbol"
+        : "entry_go_same_package_symbol"
+    };
+  }
+
+  return {
+    symbol_id: null,
+    confidence: "unresolved",
+    resolution: candidates.length > 1
+      ? "entry_handler_ambiguous"
+      : "entry_handler_out_of_scope"
+  };
+}
+
+export function rebuildEntryPointEdges(db) {
+  db.prepare("DELETE FROM edges WHERE source_kind='entry_point'").run();
+
+  const symbols = db.prepare(
+    `SELECT s.symbol_id,s.name,s.qualified_name,s.receiver,s.file_path,
+            s.language,f.package_name
+       FROM symbols s
+       LEFT JOIN files f ON f.path=s.file_path`
+  ).all();
+  const symbolsByName = new Map();
+  const symbolIds = new Set();
+  for (const symbol of symbols) {
+    symbolIds.add(symbol.symbol_id);
+    if (!symbolsByName.has(symbol.name)) symbolsByName.set(symbol.name, []);
+    symbolsByName.get(symbol.name).push(symbol);
+  }
+
+  const entries = db.prepare("SELECT * FROM entry_points ORDER BY id").all();
+  const update = db.prepare(
+    "UPDATE entry_points SET handler_symbol_id=? WHERE id=?"
+  );
+  const insert = db.prepare(
+    `INSERT INTO edges(
+       edge_id,from_node_id,to_node_id,type,confidence,evidence_json,source_kind,source_id
+     ) VALUES(?,?,?,?,?,?,?,?)`
+  );
+
+  for (const entry of entries) {
+    const resolved = entryHandlerResolution(
+      db, entry, symbolsByName, symbolIds
+    );
+    update.run(resolved.symbol_id, entry.id);
+    let metadata = {};
+    try {
+      metadata = entry.metadata_json ? JSON.parse(entry.metadata_json) : {};
+    } catch {}
+
+    const targetNode = resolved.symbol_id
+      ? `symbol:${resolved.symbol_id}`
+      : `ref:entry_handler:${entry.handler_ref || entry.id}`;
+    const evidence = {
+      type: resolved.symbol_id ? "static_resolution" : "unresolved_reference",
+      source: "entry_points",
+      source_id: entry.id,
+      file: entry.file_path,
+      line: entry.line,
+      entry_kind: entry.entry_kind,
+      entry_name: entry.entry_name,
+      handler_ref: entry.handler_ref ?? null,
+      registration: metadata.registration ?? null,
+      method: metadata.method ?? null,
+      resolution: resolved.resolution
+    };
+
+    insert.run(
+      `entry_point:${entry.id}`,
+      entry.node_id,
+      targetNode,
+      "entry_handler",
+      resolved.confidence,
+      JSON.stringify(evidence),
+      "entry_point",
+      entry.id
     );
   }
 }

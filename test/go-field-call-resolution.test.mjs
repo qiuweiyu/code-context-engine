@@ -61,7 +61,7 @@ test("Go receiver field interface call resolves only with one complete implement
   ].join("\n");
   const { root, result, db } = await indexedGoFixture(source);
   try {
-    assert.equal(result.manifest.schema_version, 8);
+    assert.equal(result.manifest.schema_version, 9);
     assert.equal(
       db.prepare("SELECT DISTINCT parser_version AS v FROM files").get().v,
       parserVersionFor("go")
@@ -109,7 +109,7 @@ test("Go interface signature resolves across package qualification with package 
     ].join("\n")
   });
   try {
-    assert.equal(result.manifest.schema_version, 8);
+    assert.equal(result.manifest.schema_version, 9);
     assert.equal(
       db.prepare("SELECT package_name FROM files WHERE path='backend/catalog/service.go'").get().package_name,
       "catalog"

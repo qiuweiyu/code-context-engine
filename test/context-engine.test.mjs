@@ -345,7 +345,7 @@ test("schema migration backfills dependency typed edges without reindexing", asy
   const dbPath = path.join(indexDir, "index.sqlite");
   try {
     const first = await indexRepository({ repoRoot: root });
-    assert.equal(first.manifest.schema_version, 8);
+    assert.equal(first.manifest.schema_version, 9);
     assert.ok(first.manifest.counts.edges > 0);
 
     const edgeLines = (await fs.readFile(path.join(indexDir, "edges.jsonl"), "utf8"))
@@ -353,7 +353,7 @@ test("schema migration backfills dependency typed edges without reindexing", asy
     assert.ok(edgeLines.some((edge) => edge.type === "call"));
     assert.ok(edgeLines.some((edge) => edge.type === "import"));
     assert.ok(edgeLines.every((edge) => EDGE_CONFIDENCE.includes(edge.confidence)));
-    for (const type of ["call", "import", "route_handler", "api_request", "db_read", "db_write", "test_of", "page_api"]) {
+    for (const type of ["entry_handler", "call", "import", "route_handler", "api_request", "db_read", "db_write", "test_of", "page_api"]) {
       assert.ok(EDGE_TYPES.includes(type));
     }
 
@@ -370,7 +370,7 @@ test("schema migration backfills dependency typed edges without reindexing", asy
     try {
       assert.equal(
         migrated.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get().value,
-        "8"
+        "9"
       );
       assert.equal(
         migrated.db.prepare("SELECT COUNT(*) AS n FROM edges WHERE source_kind='dependency'").get().n,
@@ -379,6 +379,12 @@ test("schema migration backfills dependency typed edges without reindexing", asy
       assert.equal(
         migrated.db.prepare("SELECT value FROM meta WHERE key='last_indexed_at'").get().value,
         indexedAt
+      );
+      assert.equal(
+        migrated.db.prepare(
+          "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='entry_points'"
+        ).get().n,
+        1
       );
       assert.ok(
         migrated.db.prepare("PRAGMA table_info(files)").all().some((column) => column.name === "package_name")
@@ -441,7 +447,7 @@ test("HTTP route registrations resolve typed route_handler edges by receiver par
     await git(root, "commit", "-qm", "init");
 
     const result = await indexRepository({ repoRoot: root });
-    assert.equal(result.manifest.schema_version, 8);
+    assert.equal(result.manifest.schema_version, 9);
 
     const db = new DatabaseSync(path.join(root, ".context-index/index.sqlite"));
     try {
@@ -547,8 +553,14 @@ test("schema v6 adds route handler owner metadata without changing indexed_at", 
       assert.ok(columns.includes("handler_symbol_id"));
       assert.ok(columns.includes("handler_owner_type"));
       assert.equal(
+        migrated.db.prepare(
+          "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='entry_points'"
+        ).get().n,
+        1
+      );
+      assert.equal(
         migrated.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get().value,
-        "8"
+        "9"
       );
       assert.equal(
         migrated.db.prepare("SELECT value FROM meta WHERE key='last_indexed_at'").get().value,
@@ -615,7 +627,7 @@ test("frontend requests resolve to backend routes through method and normalized 
     await git(root, "commit", "-qm", "init");
 
     const result = await indexRepository({ repoRoot: root });
-    assert.equal(result.manifest.schema_version, 8);
+    assert.equal(result.manifest.schema_version, 9);
 
     const db = new DatabaseSync(path.join(root, ".context-index/index.sqlite"));
     try {

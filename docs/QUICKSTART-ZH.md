@@ -78,6 +78,7 @@ Get-Content "D:\Path\To\YourProject\.context-index\manifest.json"
 ├── files.jsonl
 ├── symbols.jsonl
 ├── features.jsonl
+├── entry-points.jsonl
 ├── routes.jsonl
 ├── tables.jsonl
 ├── tests.jsonl
@@ -90,6 +91,7 @@ Get-Content "D:\Path\To\YourProject\.context-index\manifest.json"
 - `index.sqlite`：主要查询数据库
 - `symbols.jsonl`：函数、方法、参数、返回值、文件位置、行号和 hash
 - `dependencies.jsonl`：import / call 等依赖关系
+- `entry-points.jsonl`：CLI / job / consumer / queue 等非 HTTP 入口
 - `routes.jsonl`：HTTP Route
 - `tables.jsonl`：数据库对象和 SQL 操作
 - `tests.jsonl`：测试与源码映射
@@ -104,10 +106,17 @@ node .\src\cli.js query --repo "D:\Path\To\YourProject" --task "编辑未发布�
 
 建议先读取 `must_read`，上下文不足时再看 `maybe_read`。查询没有命中，不代表功能一定不存在。
 
-查询结果还会返回 `query_expansion.graph_seed_nodes`、`graph_expansion` 和 `selection.intent_reserved_files`。CCE 会从关键词/项目别名命中的少量入口出发，沿 `page_api`、`api_request`、`route_handler`、`call`、`db_read`、`db_write`、`test_of` 等静态 typed edge 做有界扩展。查询最多走 6 hops，不会沿 `unresolved` 关系继续传播。
+查询结果还会返回 `query_expansion.graph_seed_nodes`、`graph_expansion` 和 `selection.intent_reserved_files`。CCE 会从关键词/项目别名命中的少量入口出发，沿 `entry_handler`、`page_api`、`api_request`、`route_handler`、`call`、`db_read`、`db_write`、`test_of` 等静态 typed edge 做有界扩展。查询最多走 6 hops，不会沿 `unresolved` 关系继续传播。
 
 如果任务明确同时提到“管理端”“小程序”等多个 surface，最终 Top-N 会为图中已经发现、且匹配这些显式 path intent 的文件保留少量名额，避免某一个 surface 的高分结果把另一个 surface 全部挤掉。
 
+对于非 HTTP 流程，可以先查看 `.context-index/entry-points.jsonl`，也可以按 job/topic 名称查询，然后把其中的 `node_id` 交给 flow：
+
+```powershell
+node .\src\cli.js flow --repo "D:\Path\To\YourProject" --start "entry:job:cmd/worker/main.go:%40daily:11" --edge-types entry_handler,call,db_read,db_write,test_of
+```
+
+WP14 只识别有静态依据的入口模式（如 Go `package main`、直接 cron 注册、直接 consumer/queue 注册）。TS/JS 的简单 handler 只在同文件内解析，Go handler 可在同目录同 package 内解析；跨文件 TS/JS 或其他证据不足/有歧义的 handler 保持 unresolved，不猜运行时目标。
 
 ## 项目业务词别名
 

@@ -65,7 +65,7 @@ test("database source facts become conservative typed graph edges", async () => 
   const root = await fixture();
   try {
     const result = await indexRepository({ repoRoot: root });
-    assert.equal(result.manifest.schema_version, 8);
+    assert.equal(result.manifest.schema_version, 9);
 
     const db = new DatabaseSync(path.join(root, ".context-index/index.sqlite"));
     try {

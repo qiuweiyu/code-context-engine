@@ -78,6 +78,7 @@ Get-Content "D:\Path\To\YourProject\.context-index\manifest.json"
 ├── files.jsonl
 ├── symbols.jsonl
 ├── features.jsonl
+├── entry-points.jsonl
 ├── routes.jsonl
 ├── tables.jsonl
 ├── tests.jsonl
@@ -95,10 +96,17 @@ node .\src\cli.js query --repo "D:\Path\To\YourProject" --task "edit an unpublis
 
 Read `must_read` first, then expand into `maybe_read` only when necessary. A missing result is not proof that a feature does not exist.
 
-The query result also reports `query_expansion.graph_seed_nodes`, `graph_expansion`, and `selection.intent_reserved_files`. CCE can expand from lexical/project-alias seeds through static typed edges such as `page_api`, `api_request`, `route_handler`, `call`, `db_read`, `db_write`, and `test_of`. Query traversal is bounded to at most 6 hops and does not traverse unresolved links.
+The query result also reports `query_expansion.graph_seed_nodes`, `graph_expansion`, and `selection.intent_reserved_files`. CCE can expand from lexical/project-alias seeds through static typed edges such as `entry_handler`, `page_api`, `api_request`, `route_handler`, `call`, `db_read`, `db_write`, and `test_of`. Query traversal is bounded to at most 6 hops and does not traverse unresolved links.
 
 When the task explicitly names multiple surfaces (for example admin UI and miniprogram), graph-discovered files matching those explicit path intents receive a small bounded reservation in final Top-N selection.
 
+For non-HTTP flows, inspect `.context-index/entry-points.jsonl` or query by job/topic name, then pass the returned `node_id` to `flow`:
+
+```powershell
+node .\src\cli.js flow --repo "D:\Path\To\YourProject" --start "entry:job:cmd/worker/main.go:%40daily:11" --edge-types entry_handler,call,db_read,db_write,test_of
+```
+
+WP14 recognizes only bounded static entry forms (for example Go `package main`, direct cron registrations, and direct consumer/queue registrations). Simple TS/JS handlers resolve only within the same file; Go handlers may resolve within the same directory/package. Cross-file TS/JS or otherwise weak/ambiguous handler evidence remains unresolved.
 
 ## Project-specific query aliases
 

@@ -74,6 +74,7 @@ function fileScoreMultiplier(filePath, terms) {
 }
 
 const QUERY_GRAPH_FORWARD_TYPES = Object.freeze([
+  "entry_handler",
   "page_api",
   "api_request",
   "route_handler",
@@ -83,6 +84,7 @@ const QUERY_GRAPH_FORWARD_TYPES = Object.freeze([
 ]);
 
 const QUERY_GRAPH_REVERSE_TYPES = Object.freeze([
+  "entry_handler",
   "page_api",
   "api_request",
   "route_handler",
@@ -207,13 +209,14 @@ function rankMatchedDbNodes(db, matchedDbNodes) {
     );
 }
 
-function buildGraphSeeds(files, matchedRouteNodes, rankedDbNodes, nonTestFiles) {
+function buildGraphSeeds(files, matchedEntryNodes, matchedRouteNodes, rankedDbNodes, nonTestFiles) {
   const overall = [...files.values()]
     .filter((entry) => nonTestFiles.has(entry.path))
     .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
 
   const nodes = [
     ...symbolSeedsFromEntries(channelEntries(files, "symbol"), 2, nonTestFiles),
+    ...matchedEntryNodes.slice(0, 2),
     ...matchedRouteNodes.slice(0, 2),
     ...rankedDbNodes.slice(0, 5).map((item) => item.node_id),
     ...symbolSeedsFromEntries(channelEntries(files, "db"), 1, nonTestFiles),
@@ -396,6 +399,29 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
     rankedSymbols.sort((a,b)=>b.score-a.score);
     for (const symbol of rankedSymbols.slice(0, 20)) addFile(files, symbol.file_path, symbol.score, "symbol_match", symbol.symbol_id, "symbol");
 
+    const matchedEntryNodes = [];
+    const entryPoints = db.prepare("SELECT * FROM entry_points").all();
+    for (const entry of entryPoints) {
+      const entryText = [
+        entry.entry_kind,
+        entry.entry_name,
+        entry.handler_ref ?? ""
+      ].join(" ");
+      const projectScore = textScore(entryText, projectTerms, 24);
+      const score = textScore(entryText, terms, 11) + projectScore;
+      if (score > 0 && (projectTerms.length === 0 || projectScore > 0)) {
+        addFile(
+          files,
+          entry.file_path,
+          score,
+          `entry:${entry.entry_kind} ${entry.entry_name}`,
+          entry.handler_symbol_id ?? entry.symbol_id,
+          "entry"
+        );
+        matchedEntryNodes.push(entry.node_id);
+      }
+    }
+
     const matchedRouteNodes = [];
     const routes = db.prepare("SELECT * FROM routes").all();
     for (const route of routes) {
@@ -435,7 +461,13 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
       db.prepare("SELECT path FROM files WHERE is_test=0").all().map((row) => row.path)
     );
     const rankedDbNodes = rankMatchedDbNodes(db, matchedDbNodes);
-    const graphSeeds = buildGraphSeeds(files, matchedRouteNodes, rankedDbNodes, nonTestFiles);
+    const graphSeeds = buildGraphSeeds(
+      files,
+      matchedEntryNodes,
+      matchedRouteNodes,
+      rankedDbNodes,
+      nonTestFiles
+    );
     const graphExpansion = expandFromGraph(db, files, graphSeeds);
 
     const importCandidates = graphExpansion.added_file_paths

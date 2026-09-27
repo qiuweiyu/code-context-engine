@@ -80,6 +80,7 @@ server.registerTool(
       node_limit: z.number().int().min(1).max(1000).optional(),
       min_confidence: z.enum(["exact", "static", "inferred"]).optional(),
       edge_types: z.array(z.enum([
+        "entry_handler",
         "call",
         "import",
         "route_handler",

@@ -35,7 +35,7 @@ Ubuntu: `/opt/CCE/code-context-engine`, Node 22.22.1, Go 1.26.0. CI uses Node 22
 
 ## 4. Revised engineering sequence (2026-09-27)
 
-This sequence supersedes the earlier ordering that placed the first accuracy corpus at WP14. WP8-A through WP11 are merged. The conditional WP12 SSA/callgraph gate is deferred because the WP11 frozen corpus has no labeled false negative requiring SSA. WP13 is the current package on `work/cce-wp13-quality-ci`; later packages remain planned. An analyzer change must be measured against a frozen corpus, not just the regression suite.
+This sequence supersedes the earlier ordering that placed the first accuracy corpus at WP14. WP8-A through WP13 are merged. The conditional WP12 SSA/callgraph gate remains deferred because the frozen corpus has no labeled false negative requiring SSA. WP14 is the current package on `work/cce-wp14-entry-flows`; later packages remain planned. An analyzer change must be measured against a frozen corpus, not just the regression suite.
 
 | Package | Goal and scope | Non-goals / dependency | Acceptance and risk |
 | --- | --- | --- | --- |

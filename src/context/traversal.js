@@ -1,6 +1,7 @@
 import { EDGE_CONFIDENCE, EDGE_TYPES } from "./edges.js";
 
 export const TRAVERSAL_EDGE_PRIORITY = Object.freeze([
+  "entry_handler",
   "api_request",
   "route_handler",
   "call",
@@ -126,6 +127,30 @@ function parseRouteNode(nodeId) {
 }
 
 function describeNode(db, nodeId) {
+  if (nodeId.startsWith("entry:")) {
+    const row = db.prepare(
+      `SELECT id,node_id,file_path,symbol_id,entry_kind,entry_name,line,
+              handler_ref,handler_symbol_id,metadata_json
+         FROM entry_points WHERE node_id=?`
+    ).get(nodeId);
+    if (!row) return { node_id: nodeId, kind: "entry" };
+    let metadata = {};
+    try {
+      metadata = row.metadata_json ? JSON.parse(row.metadata_json) : {};
+    } catch {}
+    return {
+      node_id: nodeId,
+      kind: "entry",
+      entry_kind: row.entry_kind,
+      entry_name: row.entry_name,
+      file_path: row.file_path,
+      line: row.line,
+      handler_ref: row.handler_ref,
+      handler_symbol_id: row.handler_symbol_id,
+      metadata
+    };
+  }
+
   if (nodeId.startsWith("symbol:")) {
     const symbolId = nodeId.slice("symbol:".length);
     const row = db.prepare(

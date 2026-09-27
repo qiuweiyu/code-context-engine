@@ -1,5 +1,5 @@
-export const SCHEMA_VERSION = 8;
-export const PARSER_VERSION = "0.2.5";
+export const SCHEMA_VERSION = 9;
+export const PARSER_VERSION = "0.2.6";
 
 export const SCHEMA_SQL = `
 PRAGMA foreign_keys = ON;
@@ -72,6 +72,22 @@ CREATE INDEX IF NOT EXISTS idx_edges_from_node ON edges(from_node_id);
 CREATE INDEX IF NOT EXISTS idx_edges_to_node ON edges(to_node_id);
 CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(type);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_source ON edges(source_kind,source_id);
+
+CREATE TABLE IF NOT EXISTS entry_points (
+  id INTEGER PRIMARY KEY,
+  node_id TEXT NOT NULL UNIQUE,
+  file_path TEXT NOT NULL REFERENCES files(path) ON DELETE CASCADE,
+  symbol_id TEXT,
+  entry_kind TEXT NOT NULL,
+  entry_name TEXT NOT NULL,
+  line INTEGER NOT NULL,
+  handler_ref TEXT,
+  handler_symbol_id TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_entry_points_file ON entry_points(file_path);
+CREATE INDEX IF NOT EXISTS idx_entry_points_kind ON entry_points(entry_kind);
+CREATE INDEX IF NOT EXISTS idx_entry_points_handler ON entry_points(handler_symbol_id);
 
 CREATE TABLE IF NOT EXISTS routes (
   id INTEGER PRIMARY KEY,

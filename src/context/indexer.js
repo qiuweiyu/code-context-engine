@@ -9,7 +9,7 @@ import { openStore, transaction } from "./store.js";
 import { DEFAULT_ANALYZERS, analyzePendingFiles, parserVersionFor } from "./analyzers.js";
 import { loadFeatureDefinitions, markFeaturesForFileChange, markFeaturesForSymbolChange, refreshFeatureStatus, syncFeatureDefinitions } from "./features.js";
 import { exportIndex } from "./export.js";
-import { rebuildApiRequestEdges, rebuildDbObjectEdges, rebuildDependencyEdges, rebuildPageApiEdges, rebuildRouteHandlerEdges, rebuildTestEdges } from "./edges.js";
+import { rebuildApiRequestEdges, rebuildDbObjectEdges, rebuildDependencyEdges, rebuildEntryPointEdges, rebuildPageApiEdges, rebuildRouteHandlerEdges, rebuildTestEdges } from "./edges.js";
 
 async function readLocalSource(repoRoot, relPath) {
   const full = path.resolve(repoRoot, relPath);
@@ -73,7 +73,36 @@ function insertAnalysis(db, relPath, language, hash, text, analysis, now) {
   }
 
   const dbStmt = db.prepare(`INSERT INTO db_objects(file_path,symbol_id,object_type,object_name,operation,line) VALUES(?,?,?,?,?,?)`);
-  for (const obj of analysis.dbObjects) dbStmt.run(relPath, obj.symbol_id, obj.object_type, obj.object_name, obj.operation, obj.line);
+  for (const obj of analysis.dbObjects) {
+    dbStmt.run(
+      relPath,
+      obj.symbol_id,
+      obj.object_type,
+      obj.object_name,
+      obj.operation,
+      obj.line
+    );
+  }
+
+  const entryStmt = db.prepare(`
+    INSERT INTO entry_points(
+      node_id,file_path,symbol_id,entry_kind,entry_name,line,
+      handler_ref,handler_symbol_id,metadata_json
+    ) VALUES(?,?,?,?,?,?,?,?,?)
+  `);
+  for (const entry of analysis.entryPoints ?? []) {
+    entryStmt.run(
+      entry.node_id,
+      relPath,
+      entry.symbol_id ?? null,
+      entry.entry_kind,
+      entry.entry_name,
+      entry.line,
+      entry.handler_ref ?? null,
+      entry.handler_symbol_id ?? null,
+      JSON.stringify(entry.metadata ?? {})
+    );
+  }
 }
 
 function normalizeGoType(value) {
@@ -682,6 +711,7 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
       rebuildTestMappings(db);
       rebuildTestEdges(db);
       rebuildDependencyEdges(db);
+      rebuildEntryPointEdges(db);
       rebuildRouteHandlerEdges(db);
       rebuildApiRequestEdges(db);
       rebuildDbObjectEdges(db);

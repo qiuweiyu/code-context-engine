@@ -15,6 +15,9 @@ const EVIDENCE_KEYS = Object.freeze([
   "client_route_path",
   "server_route_path",
   "handler_ref",
+  "entry_kind",
+  "entry_name",
+  "registration",
   "resolution",
   "relation",
   "from_file",
@@ -37,6 +40,18 @@ function compactNode(node) {
     node_id: node.node_id,
     kind: node.kind
   };
+
+  if (node.kind === "entry") {
+    return {
+      ...base,
+      entry_kind: node.entry_kind ?? null,
+      entry_name: node.entry_name ?? null,
+      file_path: node.file_path ?? null,
+      line: node.line ?? null,
+      handler_ref: node.handler_ref ?? null,
+      handler_symbol_id: node.handler_symbol_id ?? null
+    };
+  }
 
   if (node.kind === "symbol") {
     return {
