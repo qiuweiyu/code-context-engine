@@ -37,15 +37,15 @@ The deterministic core remains the default; Semantic Provider v1 remains explici
 - [x] deterministic `benchmark:gate` passes.
 - [x] `benchmark:semantic:gate` passes.
 - [x] `npm run release:smoke` passes.
-- [ ] Ubuntu CI passes.
-- [ ] Windows CI passes.
+- [x] Ubuntu CI passes.
+- [x] Windows CI passes.
 - [x] protected historical `package-lock.json` remains untracked and unchanged.
 
 ## Release gate
 
-- [ ] WP18 PR is merged by squash.
-- [ ] Ubuntu `main == origin/main`.
-- [ ] post-merge release verification passes.
+- [x] WP18 PR is merged by squash.
+- [x] Ubuntu `main == origin/main`.
+- [x] post-merge release verification passes.
 - [ ] tag `v0.2.0` points to the accepted main commit.
 - [ ] GitHub Release `v0.2.0` is published.
 - [ ] release branch is deleted locally and remotely.
