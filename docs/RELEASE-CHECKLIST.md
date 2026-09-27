@@ -46,10 +46,10 @@ The deterministic core remains the default; Semantic Provider v1 remains explici
 - [x] WP18 PR is merged by squash.
 - [x] Ubuntu `main == origin/main`.
 - [x] post-merge release verification passes.
-- [ ] tag `v0.2.0` points to the accepted main commit.
-- [ ] GitHub Release `v0.2.0` is published.
-- [ ] release branch is deleted locally and remotely.
-- [ ] Linear SGC-73 is Done.
+- [x] tag `v0.2.0` points to the accepted main commit.
+- [x] GitHub Release `v0.2.0` is published.
+- [x] release branch is deleted locally and remotely.
+- [x] Linear SGC-73 is Done.
 
 ## npm publication
 
