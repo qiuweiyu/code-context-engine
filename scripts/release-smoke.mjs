@@ -12,9 +12,12 @@ const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const git = process.platform === "win32" ? "git.exe" : "git";
 
 async function run(command, args, options = {}) {
+  const needsWindowsShell =
+    process.platform === "win32" && /\.(?:cmd|bat)$/i.test(command);
   return exec(command, args, {
     windowsHide: true,
     maxBuffer: 8 * 1024 * 1024,
+    shell: needsWindowsShell,
     ...options
   });
 }
