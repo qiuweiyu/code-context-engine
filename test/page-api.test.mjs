@@ -80,7 +80,7 @@ test("Vue pages link to actually called imported API symbols", async () => {
     try {
       assert.deepEqual(
         db.prepare("SELECT DISTINCT parser_version AS v FROM files ORDER BY v").all().map((row) => row.v),
-        [parserVersionFor("vue")]
+        [parserVersionFor("vue"), parserVersionFor("typescript")].sort()
       );
 
       const importDep = db.prepare(

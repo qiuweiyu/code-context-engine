@@ -40,7 +40,7 @@ test("internal contract selects analyzers and attaches per-fact provenance", asy
   assert.equal(ANALYZER_CONTRACT_VERSION, 1);
   assert.equal(analyzerFor("go").id, "go-ast");
   assert.equal(analyzerFor("python").id, "text-facts");
-  assert.equal(analyzerFor("typescript").capabilities.exactResolution, "unsupported");
+  assert.equal(analyzerFor("typescript").capabilities.exactResolution, "static");
   const item = {
     relPath: "client.ts", language: "typescript",
     text: "export function beta() { return request('/api/items'); }"
@@ -51,7 +51,7 @@ test("internal contract selects analyzers and attaches per-fact provenance", asy
   assert.deepEqual(output.diagnostics, []);
   const facts = output.results.get(item.relPath);
   assert.equal(facts.status, "complete");
-  assert.equal(facts.symbols[0].provenance.analyzer_id, "script-regex");
+  assert.equal(facts.symbols[0].provenance.analyzer_id, "typescript-compiler");
   assert.equal(facts.routes[0].provenance.evidence, "text_pattern");
 });
 

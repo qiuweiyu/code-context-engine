@@ -241,6 +241,63 @@ function parseMetadata(value) {
   }
 }
 
+function resolveExportedSymbol(db, symbolsByFile, moduleFile, exportedName, seen = new Set()) {
+  const key = moduleFile + "::" + exportedName;
+  if (seen.has(key)) return { symbol: null, candidateCount: 0, resolution: "re_export_cycle" };
+  const nextSeen = new Set(seen);
+  nextSeen.add(key);
+
+  const direct = (symbolsByFile.get(moduleFile) ?? [])
+    .filter((symbol) => symbol.name === exportedName);
+  if (direct.length === 1) {
+    return { symbol: direct[0], candidateCount: 1, resolution: "import_binding_symbol" };
+  }
+  if (direct.length > 1) {
+    return { symbol: null, candidateCount: direct.length, resolution: "import_binding_target_ambiguous" };
+  }
+
+  const matches = new Map();
+  const imports = db.prepare(
+    "SELECT to_file,metadata_json FROM dependencies WHERE from_file=? AND relation='imports' ORDER BY id"
+  ).all(moduleFile);
+  for (const dep of imports) {
+    if (!dep.to_file) continue;
+    const metadata = parseMetadata(dep.metadata_json);
+    const bindings = Array.isArray(metadata.import_bindings) ? metadata.import_bindings : [];
+    if (metadata.import_kind === "re_export") {
+      for (const binding of bindings) {
+        const exposed = String(binding?.exported ?? binding?.local ?? "");
+        if (exposed !== exportedName) continue;
+        const imported = String(binding?.imported ?? exportedName);
+        const nested = resolveExportedSymbol(
+          db, symbolsByFile, dep.to_file, imported, nextSeen
+        );
+        if (nested.symbol) matches.set(nested.symbol.symbol_id, nested.symbol);
+      }
+    } else if (metadata.import_kind === "re_export_all") {
+      const nested = resolveExportedSymbol(
+        db, symbolsByFile, dep.to_file, exportedName, nextSeen
+      );
+      if (nested.symbol) matches.set(nested.symbol.symbol_id, nested.symbol);
+    }
+  }
+
+  if (matches.size === 1) {
+    return {
+      symbol: [...matches.values()][0],
+      candidateCount: 1,
+      resolution: "re_export_chain"
+    };
+  }
+  return {
+    symbol: null,
+    candidateCount: matches.size,
+    resolution: matches.size > 1
+      ? "re_export_target_ambiguous"
+      : "import_binding_target_missing"
+  };
+}
+
 export function rebuildPageApiEdges(db) {
   db.prepare("DELETE FROM edges WHERE source_kind='page_api'").run();
 
@@ -307,16 +364,14 @@ export function rebuildPageApiEdges(db) {
 
       if (bindings.length !== 1 || !importedName) continue;
       const binding = bindings[0];
-      const candidates = (symbolsByFile.get(binding.module_file) ?? [])
-        .filter((symbol) => symbol.name === importedName);
-
-      const resolved = candidates.length === 1 ? candidates[0] : null;
+      const target = resolveExportedSymbol(
+        db, symbolsByFile, binding.module_file, importedName
+      );
+      const resolved = target.symbol;
       const toNode = resolved
         ? nodeId("symbol", resolved.symbol_id)
         : nodeId("ref", `page_api:${binding.module_ref}:${importedName}`);
-      const resolution = resolved
-        ? "import_binding_symbol"
-        : (candidates.length > 1 ? "import_binding_target_ambiguous" : "import_binding_target_missing");
+      const resolution = target.resolution;
       const confidence = resolved ? "static" : "unresolved";
 
       insert.run(
@@ -338,7 +393,7 @@ export function rebuildPageApiEdges(db) {
           binding_kind: binding.kind,
           local_binding: binding.local,
           imported_name: importedName,
-          candidate_count: candidates.length,
+          candidate_count: target.candidateCount,
           resolution
         }),
         "page_api",
