@@ -118,6 +118,13 @@ The next milestone should improve analyzer precision rather than continue adding
 - [x] implement explicit opt-in provider execution with deterministic fallback
 - [x] measure provider OFF/ON retrieval benefit without changing graph-fact quality
 
+### WP18 — First public release readiness
+
+- [ ] freeze the v0.2.0 npm package surface and clean-install smoke test
+- [ ] refresh README / Quick Start / release metadata for public use
+- [ ] pass Ubuntu + Windows release CI and post-merge verification
+- [ ] publish the v0.2.0 Git tag and GitHub Release
+
 ### Future language adapters after the contract is stable
 
 Priority candidates:

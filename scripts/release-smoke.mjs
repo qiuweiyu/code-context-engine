@@ -1,0 +1,180 @@
+#!/usr/bin/env node
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { execFile, spawn } from "node:child_process";
+import { promisify } from "node:util";
+
+const exec = promisify(execFile);
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+const git = process.platform === "win32" ? "git.exe" : "git";
+
+async function run(command, args, options = {}) {
+  return exec(command, args, {
+    windowsHide: true,
+    maxBuffer: 8 * 1024 * 1024,
+    ...options
+  });
+}
+
+function parseJson(text, label) {
+  try { return JSON.parse(text); }
+  catch (error) { throw new Error(label + " returned invalid JSON: " + error.message); }
+}
+
+async function verifyPackSurface() {
+  const { stdout } = await run(npm, ["pack", "--dry-run", "--json"], { cwd: root });
+  const report = parseJson(stdout, "npm pack --dry-run")[0];
+  const files = report?.files?.map((entry) => entry.path) ?? [];
+  const forbiddenPrefixes = [".github/", "benchmarks/", "test/"];
+  const forbidden = files.filter((entry) =>
+    forbiddenPrefixes.some((prefix) => entry.startsWith(prefix))
+  );
+  if (forbidden.length) throw new Error("development-only files packed: " + forbidden.join(", "));
+
+  const required = [
+    "package.json", "README.md", "README-ZH.md", "LICENSE",
+    "src/cli.js", "src/server.js", "src/context/indexer.js",
+    "src/semantic/provider-v1.js", "internal/goindexer/main.go",
+    "internal/scipexporter/main.go", "docs/QUICKSTART.md",
+    "docs/INTEROPERABILITY.md", "docs/SEMANTIC-PROVIDER.md",
+    "scripts/release-smoke.mjs"
+  ];
+  const missing = required.filter((entry) => !files.includes(entry));
+  if (missing.length) throw new Error("required package files missing: " + missing.join(", "));
+  return { file_count: report.entryCount, packed_bytes: report.size, unpacked_bytes: report.unpackedSize };
+}
+
+async function createFixture(repoRoot) {
+  await fs.mkdir(path.join(repoRoot, "src"), { recursive: true });
+  await fs.writeFile(path.join(repoRoot, "src", "tasks.js"),
+    "export function publishHomework() { return 'published'; }\n");
+  await run(git, ["init", "-q"], { cwd: repoRoot });
+  await run(git, ["config", "user.email", "release-smoke@example.invalid"], { cwd: repoRoot });
+  await run(git, ["config", "user.name", "CCE Release Smoke"], { cwd: repoRoot });
+  await run(git, ["add", "."], { cwd: repoRoot });
+  await run(git, ["commit", "-qm", "fixture"], { cwd: repoRoot });
+}
+
+function localBin(installRoot, name) {
+  return path.join(
+    installRoot, "node_modules", ".bin",
+    name + (process.platform === "win32" ? ".cmd" : "")
+  );
+}
+
+async function runBin(installRoot, name, args, options = {}) {
+  return run(localBin(installRoot, name), args, options);
+}
+
+async function verifyMcpStarts(installRoot, fixtureRoot) {
+  const command = localBin(installRoot, "code-context-engine-mcp");
+  const child = spawn(command, [], {
+    cwd: installRoot,
+    env: { ...process.env, CCE_ALLOWED_ROOTS: fixtureRoot },
+    windowsHide: true,
+    shell: process.platform === "win32",
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (child.exitCode !== null) {
+        reject(new Error("MCP server exited before smoke window: " + stderr.trim()));
+        return;
+      }
+      child.kill();
+      resolve();
+    }, 400);
+    child.once("error", (error) => { clearTimeout(timer); reject(error); });
+    child.once("exit", (code) => {
+      if (code !== null && code !== 0) {
+        clearTimeout(timer);
+        reject(new Error("MCP server exited early with code " + code + ": " + stderr.trim()));
+      }
+    });
+  });
+}
+
+const temp = await fs.mkdtemp(path.join(os.tmpdir(), "cce-release-smoke-"));
+try {
+  const packDir = path.join(temp, "pack");
+  const installRoot = path.join(temp, "consumer");
+  const fixtureRoot = path.join(temp, "fixture");
+  await fs.mkdir(packDir, { recursive: true });
+  await fs.mkdir(installRoot, { recursive: true });
+  await fs.mkdir(fixtureRoot, { recursive: true });
+
+  const surface = await verifyPackSurface();
+  const { stdout: packed } = await run(
+    npm, ["pack", "--json", "--pack-destination", packDir], { cwd: root }
+  );
+  const filename = parseJson(packed, "npm pack")[0]?.filename;
+  if (!filename) throw new Error("npm pack did not return a filename");
+
+  await run(npm, ["init", "-y"], { cwd: installRoot });
+  await run(npm, [
+    "install", "--ignore-scripts", "--no-audit", "--no-fund",
+    path.join(packDir, filename)
+  ], { cwd: installRoot });
+
+  const installed = parseJson(
+    await fs.readFile(path.join(
+      installRoot, "node_modules", "code-context-engine", "package.json"
+    ), "utf8"),
+    "installed package.json"
+  );
+  if (installed.version !== "0.2.0") {
+    throw new Error("installed version mismatch: " + installed.version);
+  }
+
+  for (const bin of ["cce", "code-context-engine"]) {
+    const help = await runBin(installRoot, bin, ["--help"]);
+    if (!(help.stderr + help.stdout).includes("Code Context Engine v0.2.0")) {
+      throw new Error(bin + " --help did not report v0.2.0");
+    }
+  }
+
+  await createFixture(fixtureRoot);
+  const index = parseJson(
+    (await runBin(installRoot, "cce", ["index", "--repo", fixtureRoot])).stdout,
+    "cce index"
+  );
+  if (index.ok !== true) throw new Error("packed cce index failed");
+
+  const status = parseJson(
+    (await runBin(installRoot, "cce", ["status", "--repo", fixtureRoot])).stdout,
+    "cce status"
+  );
+  if (status.ok !== true) throw new Error("packed cce status failed");
+
+  const query = parseJson(
+    (await runBin(installRoot, "cce", [
+      "query", "--repo", fixtureRoot, "--task", "publish homework", "--compact"
+    ])).stdout,
+    "cce query"
+  );
+  if (query.ok !== true) throw new Error("packed cce query failed");
+  const selected = [...(query.must_read ?? []), ...(query.maybe_read ?? [])]
+    .map((entry) => entry.path);
+  if (!selected.includes("src/tasks.js")) {
+    throw new Error("packed cce query did not select src/tasks.js");
+  }
+
+  await verifyMcpStarts(installRoot, fixtureRoot);
+  process.stdout.write(JSON.stringify({
+    ok: true,
+    package: "code-context-engine@0.2.0",
+    packed_surface: surface,
+    cli_bins: ["cce", "code-context-engine"],
+    mcp_bin: "code-context-engine-mcp",
+    smoke: { index: true, status: true, query: true, mcp_start: true }
+  }, null, 2) + "\n");
+} finally {
+  await fs.rm(temp, { recursive: true, force: true });
+}
