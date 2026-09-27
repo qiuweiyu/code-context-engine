@@ -51,6 +51,19 @@ export function projectQueryOutput(result, { compact = false } = {}) {
     ...(result.analysis_diagnostics?.length
       ? { analysis_failed_files: result.analysis_diagnostics.filter((entry) => entry.status !== "complete").length }
       : {}),
+    ...(result.semantic_refinement
+      ? {
+        semantic_refinement: {
+          status: result.semantic_refinement.status,
+          ...(result.semantic_refinement.provider?.id
+            ? { provider: result.semantic_refinement.provider.id }
+            : {}),
+          ...(result.semantic_refinement.error?.code
+            ? { error_code: result.semantic_refinement.error.code }
+            : {})
+        }
+      }
+      : {}),
     semantic_refinement_recommended: Boolean(result.semantic_refinement_recommended)
   };
 }

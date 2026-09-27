@@ -35,7 +35,7 @@ Ubuntu: `/opt/CCE/code-context-engine`, Node 22.22.1, Go 1.26.0. CI uses Node 22
 
 ## 4. Revised engineering sequence (2026-09-27)
 
-This sequence supersedes the earlier ordering that placed the first accuracy corpus at WP14. WP8-A through WP15 are merged. The conditional WP12 SSA/callgraph gate remains deferred because the frozen corpus has no labeled false negative requiring SSA. WP16 is the current package on `work/cce-wp16-ide-graph-view`; WP17 remains planned. An analyzer change must be measured against a frozen corpus, not just the regression suite.
+This sequence supersedes the earlier ordering that placed the first accuracy corpus at WP14. WP8-A through WP16 are merged. The conditional WP12 SSA/callgraph gate remains deferred because the frozen corpus has no labeled false negative requiring SSA. WP17 is now active on `work/cce-wp17-semantic-providers`; Semantic Provider Protocol v1, its privacy boundary and bounded rank-fusion rule are frozen in [SEMANTIC-PROVIDER.md](SEMANTIC-PROVIDER.md). An analyzer change must be measured against a frozen corpus, not just the regression suite.
 
 | Package | Goal and scope | Non-goals / dependency | Acceptance and risk |
 | --- | --- | --- | --- |
@@ -49,7 +49,7 @@ This sequence supersedes the earlier ordering that placed the first accuracy cor
 | WP14 | CLI, job, consumer and queue entry points and non-HTTP feature flows. | Preserve implemented HTTP flows; reliable facts first. | Ground-truth trace from entry to data and tests. |
 | WP15 | SCIP, stable public schema and third-party plugin API design. | Do not freeze public ABI before multiple analyzers. | Versioned consumer compatibility and migration samples. |
 | WP16 | IDE and graph visualization prototypes. | Depends on WP15. | Navigable code and evidence. |
-| WP17 | Optional semantic providers only. | No required LLM, embedding or source upload. | Core offline mode and measurable optional benefit. |
+| WP17 | Optional semantic providers only: versioned local process protocol, bounded reranking and explicit opt-in. | No required LLM, embedding, vendor SDK, source upload or provider-owned graph facts. | Provider-disabled baseline stays compatible; provider OFF/ON retrieval benefit, latency and fallback behavior are measured. |
 
 Benchmark usage and labeling limits: [BENCHMARKS.md](BENCHMARKS.md). The implemented internal boundary is documented in [ANALYZER-CONTRACT.md](ANALYZER-CONTRACT.md). The current small corpus is a **seed baseline**, not a completed multi-language accuracy claim. The originally proposed WP11 module-resolution work is merged into WP9; the originally proposed WP14 benchmark starts in WP8-A. Keep one bounded branch per package and record measured evidence in the PR.
 ## 5. Language expansion policy

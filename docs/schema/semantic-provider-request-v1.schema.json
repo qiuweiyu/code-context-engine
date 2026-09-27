@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code-context-engine.dev/schema/semantic-provider-request-v1.schema.json",
+  "title": "CCE Semantic Provider Request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "version", "request_id", "task", "candidates"],
+  "properties": {
+    "protocol": { "const": "cce.semantic-provider" },
+    "version": { "const": "1.0" },
+    "request_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "task": { "type": "string", "minLength": 1, "maxLength": 8192 },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "deterministic_rank",
+          "deterministic_score",
+          "reasons",
+          "symbol_hints"
+        ],
+        "properties": {
+          "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+          "deterministic_rank": { "type": "integer", "minimum": 1, "maximum": 64 },
+          "deterministic_score": { "type": "number" },
+          "reasons": {
+            "type": "array",
+            "maxItems": 16,
+            "items": { "type": "string", "maxLength": 512 }
+          },
+          "symbol_hints": {
+            "type": "array",
+            "maxItems": 16,
+            "items": { "type": "string", "maxLength": 512 }
+          }
+        }
+      }
+    }
+  }
+}

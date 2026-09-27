@@ -4,10 +4,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { assertAllowedPath } from "./security.js";
 import { indexRepository } from "./context/indexer.js";
-import { queryContext } from "./context/retriever.js";
+import { queryContext, queryContextWithSemantic } from "./context/retriever.js";
 import { readIndexStatus } from "./context/status.js";
 import { buildRepositoryFlowManifest } from "./context/flow-manifest.js";
 import { serializeQueryOutput } from "./context/query-output.js";
+import { loadMcpSemanticProviderSpecV1 } from "./semantic/spec-path.js";
 
 const server = new McpServer({ name: "code-context-engine", version: "0.1.7" });
 const textResult = (value) => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
@@ -41,19 +42,34 @@ server.registerTool(
   {
     title: "Query local code context",
     description:
-      "Queries the local code knowledge index. Set compact=true for an LLM-oriented projection with selected files, symbol hints, tests, and coverage while preserving the full debug view by default. No source is uploaded and no model is called.",
+      "Queries the local code knowledge index. Set compact=true for an LLM-oriented projection. Deterministic retrieval is the default. semantic_provider explicitly opts into a local Semantic Provider v1 spec inside repo_root; CCE does not send source bodies to that provider.",
     inputSchema: {
       repo_root: z.string().min(1),
       task: z.string().min(3),
       max_files: z.number().int().min(1).max(50).optional(),
-      compact: z.boolean().optional().describe("Return the compact LLM-oriented query projection.")
+      compact: z.boolean().optional().describe("Return the compact LLM-oriented query projection."),
+      semantic_provider: z.string().min(1).optional().describe(
+        "Explicit opt-in path, relative to repo_root, to a Semantic Provider v1 spec JSON."
+      )
     }
   },
-  async ({ repo_root, task, max_files, compact }) => {
+  async ({ repo_root, task, max_files, compact, semantic_provider }) => {
     try {
       const allowed = assertAllowedPath(repo_root);
+      const maxFiles = max_files ?? 12;
+      const result = semantic_provider
+        ? await queryContextWithSemantic({
+          repoRoot: allowed,
+          task,
+          maxFiles,
+          semanticProviderSpec: loadMcpSemanticProviderSpecV1({
+            repoRoot: allowed,
+            specPath: semantic_provider
+          })
+        })
+        : queryContext({ repoRoot: allowed, task, maxFiles });
       return queryTextResult(
-        queryContext({ repoRoot: allowed, task, maxFiles: max_files ?? 12 }),
+        result,
         compact ?? false
       );
     } catch (error) {

@@ -106,3 +106,36 @@ test("compact query serialization is deterministic and minified", () => {
   assert.equal(first.includes("\n"), false);
   assert.deepEqual(JSON.parse(first), projectQueryOutput(full, { compact: true }));
 });
+
+
+test("compact query output exposes only bounded semantic provider status when explicitly present", () => {
+  const full = fullResult();
+  full.semantic_refinement = {
+    status: "applied",
+    provider: { id: "fixture.semantic", version: "1.0.0" },
+    candidate_count: 24,
+    weight: 0.25,
+    duration_ms: 13.2,
+    diagnostics: ["detail"],
+    selected: [{ path: "backend/classroom.go", semantic_score: 0.9 }]
+  };
+  const compact = projectQueryOutput(full, { compact: true });
+  assert.deepEqual(compact.semantic_refinement, {
+    status: "applied",
+    provider: "fixture.semantic"
+  });
+  assert.equal(JSON.stringify(compact).includes("candidate_count"), false);
+  assert.equal(JSON.stringify(compact).includes("duration_ms"), false);
+
+  full.semantic_refinement = {
+    status: "fallback",
+    error: { code: "timeout", message: "provider timed out" },
+    candidate_count: 24,
+    duration_ms: 1500
+  };
+  const fallback = projectQueryOutput(full, { compact: true });
+  assert.deepEqual(fallback.semantic_refinement, {
+    status: "fallback",
+    error_code: "timeout"
+  });
+});

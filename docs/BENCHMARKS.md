@@ -36,6 +36,55 @@ Metrics:
 
 The performance ceilings are **regression alarms**, not service-level objectives. Compare detailed timings only on the same OS/runtime; CI runs this timing gate on Ubuntu while Windows remains a functional compatibility job.
 
+## Optional semantic-provider evaluation
+
+WP17 adds a separate Semantic Corpus v1. It does **not** replace or mutate Ground Truth v6 and it does not change the graph TP/FP/FN universe.
+
+Run:
+
+```bash
+npm run benchmark:semantic
+npm run benchmark:semantic:gate
+```
+
+The semantic corpus uses `benchmarks/fixtures/semantic-paraphrase` plus the evaluation-only local process `benchmarks/providers/semantic-reference.mjs`. The reference provider is deterministic, requires no network/model/API key, and exists only to verify that the optional provider contract can produce measurable bounded reranking gains. It is not a claim about any production model or embedding system.
+
+The five frozen queries deliberately share a broad lexical `service` anchor while expressing the target behavior through paraphrases. Their relevant files start at deterministic ranks 3, 4, 5, 6 and 7. With `maxFiles=5`, the first three are selected by deterministic retrieval while the last two are outside the final selection. The semantic provider may rerank only the deterministic candidate pool and is still limited by the Protocol v1 semantic weight cap of 0.35.
+
+Semantic metrics:
+
+- Hit@1/3/5 count cases whose relevant file appears within that selected prefix.
+- MRR averages reciprocal rank of the first relevant selected file; a missing relevant file contributes zero.
+- `selected_relevant` counts relevant files surviving final selection.
+- Query timing reports the median of three OFF and ON runs per case. ON includes local provider-process startup, so it is expected to be slower.
+- Full/Compact bytes measure the minified response size. Provider OFF remains the original deterministic output shape; Provider ON adds bounded semantic status/debug metadata.
+
+`benchmarks/semantic-quality-gate.json` currently requires:
+
+- corpus version 1 and 5 cases;
+- provider applied in all 5 cases;
+- ON Hit@5 = 5/5;
+- Hit@3 improvement >= 2 cases;
+- selected relevant improvement >= 2;
+- MRR improvement >= 0.25;
+- total Compact byte increase <= 600 bytes;
+- average ON median query latency <= 500 ms on the Ubuntu quality-gate runner.
+
+The first frozen Stage 5 measurement on the Ubuntu development machine produced:
+
+| Metric | Provider OFF | Provider ON | Delta |
+| --- | ---: | ---: | ---: |
+| Hit@1 cases | 0/5 | 1/5 | +1 |
+| Hit@3 cases | 1/5 | 3/5 | +2 |
+| Hit@5 cases | 3/5 | 5/5 | +2 |
+| Selected relevant | 3 | 5 | +2 |
+| MRR | 0.1567 | 0.4567 | +0.3000 |
+| Avg median query latency | ~2.6 ms | ~115 ms | ~+112 ms |
+| Compact bytes total | 3175 | 3568 | +393 |
+
+The latency values are machine-specific observations, not a release SLA. The quality gate intentionally leaves a broad ceiling. Most importantly, the existing deterministic Ground Truth v6 gate remains TP=34, FP=1, FN=0 and `compact_bytes=6243`, so optional semantic evaluation does not redefine graph correctness.
+
+
 Current frozen corpus v6 (sixteen deliberately small cases):
 
 | Case | Positive edges found | Negative edges absent | Retrieval | Known limit / purpose |

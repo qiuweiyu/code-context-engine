@@ -36,3 +36,4 @@ jobs:
           cache: false
       - run: npm install
       - run: npm run benchmark:gate
+      - run: npm run benchmark:semantic:gate

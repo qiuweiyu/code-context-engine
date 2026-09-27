@@ -3,6 +3,15 @@ import path from "node:path";
 import { openStore } from "./store.js";
 import { expandQuery } from "../prefilter.js";
 import { traverseGraph } from "./traversal.js";
+import {
+  createSemanticProviderRequestV1,
+  runSemanticProviderV1,
+  validateSemanticProviderSpecV1
+} from "../semantic/provider-v1.js";
+import {
+  rerankSemanticCandidatesV1,
+  semanticCandidatePoolLimit
+} from "../semantic/rerank-v1.js";
 
 function loadProjectAliases(repoRoot) {
   const file = path.join(repoRoot, ".context-query-aliases.json");
@@ -344,7 +353,7 @@ function selectWithIntentReservations(rankedFiles, maxFiles, expansion) {
   };
 }
 
-export function queryContext({ repoRoot, task, indexDir = ".context-index", maxFiles = 12 }) {
+function buildQueryContextState({ repoRoot, task, indexDir = ".context-index", maxFiles = 12 }) {
   const dir = path.isAbsolute(indexDir) ? indexDir : path.join(repoRoot, indexDir);
   const { db } = openStore(dir);
   try {
@@ -510,61 +519,227 @@ export function queryContext({ repoRoot, task, indexDir = ".context-index", maxF
         channel_scores: x.channel_scores
       }))
       .sort((a,b)=>b.score-a.score || a.path.localeCompare(b.path));
-    const selection = selectWithIntentReservations(rankedFiles, maxFiles, expansion);
-    const selected = selection.selected;
-    const selectedSet = new Set(selected.map((x)=>x.path));
-    const relevantFeatures = topFeatures.map((feature)=>({ id:feature.feature_id,name:feature.name,description:feature.description,status:feature.status,needs_review:Boolean(feature.needs_review),score:Number(feature.score.toFixed(2)),invariants:feature.invariants }));
-    const implementation = selected.filter((x)=>!db.prepare("SELECT is_test FROM files WHERE path=?").get(x.path)?.is_test);
-    const selectedTests = selected.filter((x)=>db.prepare("SELECT is_test FROM files WHERE path=?").get(x.path)?.is_test);
-    const mustRead = implementation.slice(0, Math.min(8, implementation.length));
-    const maybeRead = implementation.slice(mustRead.length);
-    const wantedSymbolIds = new Set(selected.flatMap((x)=>x.symbols));
-    const symbolRows = db.prepare("SELECT * FROM symbols").all().filter((s)=>wantedSymbolIds.has(s.symbol_id) || selectedSet.has(s.file_path));
-    const rankMap = new Map(rankedSymbols.map((s)=>[s.symbol_id,s.score]));
-    const symbolDetails = symbolRows.slice(0,32).map((s)=>({ symbol_id:s.symbol_id,name:s.qualified_name,file:s.file_path,lines:[s.line_start,s.line_end],signature:s.signature,description:s.description,score:Number((rankMap.get(s.symbol_id) ?? 0).toFixed(2)) }));
-    const tests = selectedTests.map((x)=>x.path);
-    const coverage = {
-      candidate_files: rankedFiles.length,
-      selected_files: selected.length,
-      exact_feature_hits: relevantFeatures.length,
-      strong_symbol_hits: rankedSymbols.filter((s)=>s.score >= 20).length,
-      status: rankedFiles.length === 0
-        ? "insufficient"
-        : (failedAnalyses.length > 0 || topFeatures.some((f)=>f.status !== "valid" || f.needs_review)
-          ? "review_required"
-          : ((rankedFiles.length > Math.max(60, maxFiles * 5) || rankedSymbols.filter((s)=>s.score >= 20).length > 250)
-            ? "broad"
-            : "sufficient"))
-    };
+    const fileIsTest = Object.fromEntries(
+      db.prepare("SELECT path,is_test FROM files").all()
+        .map((row) => [row.path, Boolean(row.is_test)])
+    );
     return {
-      ok:true,
       task,
       terms,
-      query_expansion: {
-        applied_aliases: expansion.applied_aliases,
-        project_terms: projectTerms,
-        retrieval_mode: projectTerms.length > 0 ? "project_anchor" : "lexical",
-        graph_seed_nodes: graphExpansion.seed_nodes
-      },
-      graph_expansion: {
-        added_files: graphExpansion.added_files + importExpansion.added_files,
-        forward_steps: graphExpansion.forward_steps,
-        reverse_steps: graphExpansion.reverse_steps,
-        import_reverse_steps: importExpansion.steps,
-        import_seed_files: importExpansion.seed_files,
-        intent_boosted_files: intentBoostedFiles
-      },
-      selection: {
-        intent_reserved_files: selection.reserved_files
-      },
-      features: relevantFeatures,
-      must_read: mustRead.map((x)=>({path:x.path,score:Number(x.score.toFixed(2)),reasons:x.reasons,symbols:x.symbols})),
-      maybe_read: maybeRead.map((x)=>({path:x.path,score:Number(x.score.toFixed(2)),reasons:x.reasons,symbols:x.symbols})),
-      symbols: symbolDetails,
-      tests,
-      coverage,
-      ...(analysisDiagnostics.length ? { analysis_diagnostics: analysisDiagnostics } : {}),
-      semantic_refinement_recommended: ["insufficient", "broad"].includes(coverage.status)
+      maxFiles,
+      expansion,
+      projectTerms,
+      topFeatures,
+      rankedSymbols,
+      symbols,
+      analysisDiagnostics,
+      failedAnalyses,
+      graphExpansion,
+      importExpansion,
+      intentBoostedFiles,
+      rankedFiles,
+      fileIsTest
     };
   } finally { db.close(); }
+}
+
+function finalizeQueryContext(state, rankedFiles, semanticRefinement = null) {
+  const {
+    task,
+    terms,
+    maxFiles,
+    expansion,
+    projectTerms,
+    topFeatures,
+    rankedSymbols,
+    symbols,
+    analysisDiagnostics,
+    failedAnalyses,
+    graphExpansion,
+    importExpansion,
+    intentBoostedFiles,
+    fileIsTest
+  } = state;
+
+  const selection = selectWithIntentReservations(rankedFiles, maxFiles, expansion);
+  const selected = selection.selected;
+  const selectedSet = new Set(selected.map((x) => x.path));
+  const relevantFeatures = topFeatures.map((feature)=>({
+    id: feature.feature_id,
+    name: feature.name,
+    description: feature.description,
+    status: feature.status,
+    needs_review: Boolean(feature.needs_review),
+    score: Number(feature.score.toFixed(2)),
+    invariants: feature.invariants
+  }));
+  const implementation = selected.filter((x) => !fileIsTest[x.path]);
+  const selectedTests = selected.filter((x) => fileIsTest[x.path]);
+  const mustRead = implementation.slice(0, Math.min(8, implementation.length));
+  const maybeRead = implementation.slice(mustRead.length);
+  const wantedSymbolIds = new Set(selected.flatMap((x) => x.symbols));
+  const symbolRows = symbols.filter(
+    (symbol) => wantedSymbolIds.has(symbol.symbol_id) || selectedSet.has(symbol.file_path)
+  );
+  const rankMap = new Map(rankedSymbols.map((symbol) => [symbol.symbol_id, symbol.score]));
+  const symbolDetails = symbolRows.slice(0, 32).map((symbol) => ({
+    symbol_id: symbol.symbol_id,
+    name: symbol.qualified_name,
+    file: symbol.file_path,
+    lines: [symbol.line_start, symbol.line_end],
+    signature: symbol.signature,
+    description: symbol.description,
+    score: Number((rankMap.get(symbol.symbol_id) ?? 0).toFixed(2))
+  }));
+  const tests = selectedTests.map((x) => x.path);
+  const coverage = {
+    candidate_files: rankedFiles.length,
+    selected_files: selected.length,
+    exact_feature_hits: relevantFeatures.length,
+    strong_symbol_hits: rankedSymbols.filter((symbol) => symbol.score >= 20).length,
+    status: rankedFiles.length === 0
+      ? "insufficient"
+      : (failedAnalyses.length > 0 || topFeatures.some(
+        (feature) => feature.status !== "valid" || feature.needs_review
+      )
+        ? "review_required"
+        : ((rankedFiles.length > Math.max(60, maxFiles * 5)
+            || rankedSymbols.filter((symbol) => symbol.score >= 20).length > 250)
+          ? "broad"
+          : "sufficient"))
+  };
+
+  return {
+    ok: true,
+    task,
+    terms,
+    query_expansion: {
+      applied_aliases: expansion.applied_aliases,
+      project_terms: projectTerms,
+      retrieval_mode: projectTerms.length > 0 ? "project_anchor" : "lexical",
+      graph_seed_nodes: graphExpansion.seed_nodes
+    },
+    graph_expansion: {
+      added_files: graphExpansion.added_files + importExpansion.added_files,
+      forward_steps: graphExpansion.forward_steps,
+      reverse_steps: graphExpansion.reverse_steps,
+      import_reverse_steps: importExpansion.steps,
+      import_seed_files: importExpansion.seed_files,
+      intent_boosted_files: intentBoostedFiles
+    },
+    selection: {
+      intent_reserved_files: selection.reserved_files
+    },
+    features: relevantFeatures,
+    must_read: mustRead.map((x) => ({
+      path: x.path,
+      score: Number(x.score.toFixed(2)),
+      reasons: x.reasons,
+      symbols: x.symbols
+    })),
+    maybe_read: maybeRead.map((x) => ({
+      path: x.path,
+      score: Number(x.score.toFixed(2)),
+      reasons: x.reasons,
+      symbols: x.symbols
+    })),
+    symbols: symbolDetails,
+    tests,
+    coverage,
+    ...(analysisDiagnostics.length ? { analysis_diagnostics: analysisDiagnostics } : {}),
+    ...(semanticRefinement ? { semantic_refinement: semanticRefinement } : {}),
+    semantic_refinement_recommended: ["insufficient", "broad"].includes(coverage.status)
+  };
+}
+
+export function queryContext({
+  repoRoot,
+  task,
+  indexDir = ".context-index",
+  maxFiles = 12
+}) {
+  const state = buildQueryContextState({ repoRoot, task, indexDir, maxFiles });
+  return finalizeQueryContext(state, state.rankedFiles);
+}
+
+export async function queryContextWithSemantic({
+  repoRoot,
+  task,
+  indexDir = ".context-index",
+  maxFiles = 12,
+  semanticProviderSpec
+}) {
+  const state = buildQueryContextState({ repoRoot, task, indexDir, maxFiles });
+  if (semanticProviderSpec === undefined || semanticProviderSpec === null) {
+    return finalizeQueryContext(state, state.rankedFiles);
+  }
+
+  let normalizedSpec;
+  try {
+    normalizedSpec = validateSemanticProviderSpecV1(semanticProviderSpec);
+  } catch (error) {
+    return finalizeQueryContext(state, state.rankedFiles, {
+      status: "fallback",
+      error: {
+        code: "invalid_spec",
+        message: error instanceof Error ? error.message : "semantic provider spec is invalid"
+      },
+      candidate_count: 0,
+      duration_ms: 0
+    });
+  }
+
+  const poolSize = semanticCandidatePoolLimit(maxFiles, state.rankedFiles.length);
+  if (poolSize === 0) {
+    return finalizeQueryContext(state, state.rankedFiles, {
+      status: "fallback",
+      error: {
+        code: "no_candidates",
+        message: "deterministic retrieval produced no semantic candidates"
+      },
+      candidate_count: 0,
+      duration_ms: 0
+    });
+  }
+
+  const request = createSemanticProviderRequestV1({
+    task,
+    candidates: state.rankedFiles.slice(0, poolSize)
+  });
+  const providerResult = await runSemanticProviderV1({
+    spec: normalizedSpec,
+    request
+  });
+
+  if (providerResult.status !== "applied") {
+    return finalizeQueryContext(state, state.rankedFiles, {
+      ...providerResult,
+      candidate_count: poolSize,
+      weight: normalizedSpec.weight
+    });
+  }
+
+  const reranked = rerankSemanticCandidatesV1({
+    rankedFiles: state.rankedFiles,
+    scores: providerResult.scores,
+    weight: normalizedSpec.weight,
+    poolSize
+  });
+  const selectedPaths = new Set(
+    selectWithIntentReservations(reranked.ranked_files, maxFiles, state.expansion)
+      .selected
+      .map((entry) => entry.path)
+  );
+  const selectedRefinements = reranked.refinements
+    .filter((entry) => selectedPaths.has(entry.path));
+
+  return finalizeQueryContext(state, reranked.ranked_files, {
+    status: "applied",
+    provider: providerResult.provider,
+    candidate_count: poolSize,
+    weight: normalizedSpec.weight,
+    duration_ms: providerResult.duration_ms,
+    diagnostics: providerResult.diagnostics,
+    selected: selectedRefinements
+  });
 }
