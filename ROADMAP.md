@@ -68,9 +68,10 @@ The next milestone should improve analyzer precision rather than continue adding
 - [x] start a checked-in fixture, positive/negative typed-edge labels and query relevance
 - [x] provide a reproducible runner for labeled Precision/Recall, Top-K/MRR, cold/warm index, query time and output bytes
 - [x] add Go interface ambiguity, TS barrel, Vue dual-script, comment false-positive and ambiguous-route cases
-- [ ] expand to JS aliases, dynamic imports and real repository ground truth before promoting quality gates
+- [x] expand the checked-in corpus with JS aliases, dynamic imports and multi-project cases before promoting quality gates
+- [ ] continue permitted real-repository labels separately; never copy private source into the public corpus
 
-### WP8-B — Internal Language Analyzer Contract (implementation in progress)
+### WP8-B — Internal Language Analyzer Contract (merged)
 
 - [x] dispatch existing native analyzers through normalized fact output
 - [x] internal fact provenance, diagnostics, safe partial-result handling and per-analyzer version invalidation
@@ -79,29 +80,29 @@ The next milestone should improve analyzer precision rather than continue adding
 
 ### WP9 — TS/JS Compiler API and module resolution
 
-- [ ] use Program/TypeChecker, tsconfig/jsconfig alias and package resolution
-- [ ] handle re-exports/barrels and JavaScript where possible
-- [ ] compare labeled edge quality and index cost with WP8-A
+- [x] use Program/TypeChecker, tsconfig/jsconfig alias and package resolution
+- [x] handle re-exports/barrels and JavaScript where possible
+- [x] compare labeled edge quality and index cost with WP8-A
 
 ### WP10 — Vue compiler-sfc
 
-- [ ] parse both script blocks, script setup macros and template/component links
-- [ ] measure page/API and composable/store results against frozen cases
+- [x] parse both script blocks, script setup macros and template/component links
+- [x] measure page/API and composable/store results against frozen cases
 
 ### WP11 — Go packages and types
 
-- [ ] use go/packages and go/types for cross-package and interface facts
-- [ ] preserve AST-only results with explicit provenance when type checking fails
+- [x] use go/packages and go/types for cross-package and interface facts
+- [x] preserve AST-only results with explicit provenance when type checking fails
 
-### WP12 — Conditional Go SSA/callgraph pilot
+### WP12 — Conditional Go SSA/callgraph pilot (deferred by current quality gate)
 
 - [ ] attempt only where WP11 benchmarks justify cost
 - [ ] separate possible dynamic targets from uniquely established targets
 
 ### WP13 — Expanded corpus and quality gates
 
-- [ ] multi-project labeled corpus, edge/query metrics and performance budgets
-- [ ] compare parser generations on the same frozen source/configuration
+- [x] multi-project labeled corpus, edge/query metrics and performance budgets
+- [x] compare parser generations on the same frozen source/configuration
 
 ### WP14 — Non-HTTP flows
 
@@ -117,6 +118,13 @@ The next milestone should improve analyzer precision rather than continue adding
 - [x] freeze Semantic Provider Protocol v1, privacy boundary and bounded rank-fusion rule
 - [x] implement explicit opt-in provider execution with deterministic fallback
 - [x] measure provider OFF/ON retrieval benefit without changing graph-fact quality
+
+### WP18 — First public release readiness
+
+- [x] freeze the v0.2.0 npm package surface and clean-install smoke test
+- [x] refresh README / Quick Start / release metadata for public use
+- [ ] pass Ubuntu + Windows release CI and post-merge verification
+- [ ] publish the v0.2.0 Git tag and GitHub Release
 
 ### Future language adapters after the contract is stable
 

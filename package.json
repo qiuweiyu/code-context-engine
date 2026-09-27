@@ -1,7 +1,7 @@
 {
   "name": "code-context-engine",
-  "version": "0.1.7",
-  "description": "Local-first static code knowledge engine: symbols, calls, routes, data objects, tests, and feature flows without LLMs or source upload.",
+  "version": "0.2.0",
+  "description": "Local-first deterministic code context engine for symbols, calls, routes, data flows, tests, graph traversal, MCP, and optional bounded semantic reranking.",
   "type": "module",
   "license": "MIT",
   "bin": {
@@ -21,12 +21,42 @@
     "query": "node src/cli.js query",
     "status": "node src/cli.js status",
     "benchmark:semantic": "node benchmarks/semantic-run.mjs",
-    "benchmark:semantic:gate": "node benchmarks/semantic-gate.mjs"
+    "benchmark:semantic:gate": "node benchmarks/semantic-gate.mjs",
+    "release:smoke": "node scripts/release-smoke.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
     "@vue/compiler-sfc": "3.5.43",
     "typescript": "6.0.3",
     "zod": "^3.25.0"
+  },
+  "keywords": [
+    "code-analysis",
+    "static-analysis",
+    "code-context",
+    "mcp",
+    "developer-tools",
+    "code-graph",
+    "local-first"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qiuweiyu/code-context-engine.git"
+  },
+  "homepage": "https://github.com/qiuweiyu/code-context-engine#readme",
+  "bugs": {
+    "url": "https://github.com/qiuweiyu/code-context-engine/issues"
+  },
+  "files": [
+    "src/",
+    "internal/",
+    "skills/",
+    "docs/",
+    "scripts/release-smoke.mjs",
+    "README-ZH.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

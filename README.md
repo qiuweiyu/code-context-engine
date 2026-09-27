@@ -8,7 +8,7 @@ Code Context Engine (CCE) is a local-first static analysis tool that builds a st
 
 CCE is designed for both humans and coding agents. The core indexing path is deterministic and does not require an AI model or external API.
 
-**Quick Start:** [docs/QUICKSTART.md](docs/QUICKSTART.md) · [中文快速开始](docs/QUICKSTART-ZH.md) · [Interoperability v1](docs/INTEROPERABILITY.md) · [IDE / Graph prototype](docs/IDE-GRAPH.md)
+**Quick Start:** [docs/QUICKSTART.md](docs/QUICKSTART.md) · [中文快速开始](docs/QUICKSTART-ZH.md) · [Known limitations](docs/KNOWN-LIMITATIONS.md) · [Changelog](CHANGELOG.md) · [Interoperability v1](docs/INTEROPERABILITY.md)
 
 
 ## Why
@@ -37,26 +37,26 @@ CCE turns those facts into a local machine-readable index that can be refreshed 
 
 ## Current status
 
-`v0.1.7` is the current early open-source baseline.
+`v0.2.0` is the first public installable release.
 
 Implemented today:
 
-- Go — AST-based function/method extraction, signatures, comments, package-aware call facts and imports.
-- TypeScript / JavaScript — conservative function, import and call-reference extraction.
-- Vue SFC — script/script-setup extraction plus TypeScript/JavaScript analysis.
-- SQL and HTTP route detection — lightweight deterministic extraction.
-- Tests — filename/call-based mappings plus typed `test_of` edges.
-- Typed graph — `call`, `import`, `route_handler`, `api_request`, `db_read`, `db_write`, `test_of`, `page_api`.
+- Go — AST plus `go/packages` / `go/types` evidence for package-aware functions, methods, generics and conservative interface resolution.
+- TypeScript / JavaScript — compiler-backed module resolution, tsconfig/jsconfig paths, re-exports, imports and conservative call facts.
+- Vue SFC — `@vue/compiler-sfc` parsing for normal script + `script setup`, component/composable evidence and TS/JS analysis.
+- HTTP, SQL, CLI, scheduled-job and consumer entry facts with typed graph traversal.
+- Tests — conservative mappings plus typed `test_of` edges.
+- Typed graph — calls, imports, routes, client requests, database access, tests, page/API links and non-HTTP entry handlers.
 - Edge confidence — `exact`, `static`, `inferred`, `unresolved`.
-- Bounded graph traversal — forward/reverse, up to 6 hops, without traversing unresolved edges.
-- Cross-surface retrieval — page/API/backend/database/test evidence can be combined when the graph proves the relationship.
-- Compact query output — CLI and MCP share the same LLM-oriented projection.
+- Bounded forward/reverse graph traversal without traversing unresolved edges.
+- Cross-surface retrieval with compact CLI/MCP output for coding agents.
+- Public Index v1, SCIP export and Plugin Protocol v1.
+- Public node locate and self-contained offline graph HTML export.
+- Optional Semantic Provider v1 — explicit opt-in bounded reranking; deterministic retrieval remains the default and authoritative fact source.
 
-WP7 acceptance on three real Student Growth Companion queries reduced serialized query output by roughly 93% while preserving selected paths, coverage status and tests.
+The frozen deterministic quality corpus currently passes at TP=34, FP=1, FN=0. The separate Semantic Corpus v1 demonstrates measurable reranking benefit on five paraphrase cases without changing graph facts.
 
-The TypeScript/Vue analyzer is still intentionally conservative. The next architecture milestone is a stable language-analyzer contract, followed by TypeScript Compiler API, Vue compiler-sfc and stronger native type-system integration.
-
-CCE is not intended to remain limited to Go/TypeScript/JavaScript/Vue. Future analyzers can target Java, Python, C/C++, C#, Rust and other ecosystems while reusing the same normalized facts, graph, retrieval and MCP layers.
+CCE is not limited by design to Go/TypeScript/JavaScript/Vue, but Java, Python, C/C++, C#, Rust and other analyzers are future work rather than supported v0.2.0 analyzers.
 
 ## What it generates
 
@@ -69,6 +69,7 @@ Running an index creates `.context-index/` inside the target repository:
 ├── files.jsonl
 ├── symbols.jsonl
 ├── features.jsonl
+├── entry-points.jsonl
 ├── routes.jsonl
 ├── tables.jsonl
 ├── tests.jsonl
@@ -127,14 +128,30 @@ A stale feature should not be treated as reliable context until the reference is
 
 - Node.js 22.13+
 - Git
-- Go, when indexing Go projects
+- Go, only when indexing Go projects
 
-## Install from source
+## Install
+
+After the npm release is published:
+
+```bash
+npm install -g code-context-engine
+cce --help
+```
+
+You can also run the package without a global install:
+
+```bash
+npx code-context-engine --help
+```
+
+Source checkout remains supported for contributors:
 
 ```bash
 git clone https://github.com/qiuweiyu/code-context-engine.git
 cd code-context-engine
 npm install
+npm test
 ```
 
 ## CLI
@@ -142,13 +159,13 @@ npm install
 Index a repository:
 
 ```bash
-node src/cli.js index --repo /path/to/project
+cce index --repo /path/to/project
 ```
 
 Query the generated knowledge index:
 
 ```bash
-node src/cli.js query \
+cce query \
   --repo /path/to/project \
   --task "edit an unpublished manual task"
 ```
@@ -156,24 +173,24 @@ node src/cli.js query \
 For ChatGPT, Codex, or another coding agent, request the compact LLM view:
 
 ```bash
-node src/cli.js query \
+cce query \
   --repo /path/to/project \
   --task "edit an unpublished manual task" \
   --compact
 ```
 
-Without `--compact`, the existing full diagnostic output remains unchanged.
+Without `--compact`, the full diagnostic output remains available.
 
 Inspect freshness:
 
 ```bash
-node src/cli.js status --repo /path/to/project
+cce status --repo /path/to/project
 ```
 
-Force a full rebuild:
+Force a full rebuild only when explicitly needed:
 
 ```bash
-node src/cli.js index --repo /path/to/project --force
+cce index --repo /path/to/project --force
 ```
 
 
@@ -209,6 +226,21 @@ Query traversal uses static-confidence edges, is bounded to at most 6 hops, and 
 
 If a task explicitly names multiple code surfaces such as an admin UI and a miniprogram, final selection reserves a small bounded number of slots for graph-discovered files that match those explicit path intents so one surface cannot crowd the other out.
 
+## Optional Semantic Provider v1
+
+Semantic refinement is explicit opt-in. The deterministic retriever always creates the candidate set first; a provider can only rerank that bounded set and cannot add graph facts, change edge confidence or introduce unknown paths.
+
+Example:
+
+```bash
+cce query \
+  --repo /path/to/project \
+  --task "find where homework is assigned" \
+  --semantic-provider /path/to/provider.json
+```
+
+Provider failures, timeouts or invalid responses fall back to the deterministic result. CCE-owned provider requests do not include source-file bodies. See [docs/SEMANTIC-PROVIDER.md](docs/SEMANTIC-PROVIDER.md).
+
 ## MCP
 
 CCE also exposes the local index as a read-oriented MCP server.
@@ -219,13 +251,13 @@ Tools:
 - `context_query`
 - `context_index_status`
 
-The MCP server has no model dependency. It reads only repositories under `CCE_ALLOWED_ROOTS`. The `context_query` tool accepts optional `compact: true` and uses the same compact projection as the CLI.
+The MCP server has no model dependency. It reads only repositories under `CCE_ALLOWED_ROOTS`. The `context_query` tool accepts optional `compact: true` and explicit in-repository `semantic_provider`.
 
-Example:
+Example after global npm installation:
 
 ```bash
 export CCE_ALLOWED_ROOTS=/home/me/projects
-node src/server.js
+code-context-engine-mcp
 ```
 
 ## Query result
@@ -285,9 +317,16 @@ CCE is designed to avoid accidental secret ingestion:
 - `.env`, private keys, certificates, common credential files and lockfiles are excluded from source indexing.
 - symlinks are not followed when reading repository source.
 - MCP access is limited by `CCE_ALLOWED_ROOTS`.
-- the core engine makes no network requests.
+- the deterministic core makes no network requests.
+- Semantic Provider v1 is never auto-enabled; a user-configured provider is a separate process with its own trust/network boundary.
 
 Static analysis output can still reveal project structure. Treat exported index files according to the sensitivity of the source repository.
+
+## Known limitations
+
+CCE v0.2.0 does not claim full runtime reconstruction and does not yet provide first-class Java, Python, C/C++, C# or Rust analyzers. Dynamic dispatch, reflection, generated/configuration-driven wiring and unsupported framework registrations may remain unresolved. Semantic Provider v1 can rerank only deterministic candidates; it cannot recover a file that never entered that bounded candidate set.
+
+See [docs/KNOWN-LIMITATIONS.md](docs/KNOWN-LIMITATIONS.md) for the full release boundary.
 
 ## Architecture
 

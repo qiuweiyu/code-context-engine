@@ -8,7 +8,7 @@ Code Context Engine（CCE）是一个本地优先的静态代码分析工具。�
 
 CCE 面向开发者、IDE、CI 和 Coding Agent。核心索引流程不依赖任何 AI 模型或外部 API。
 
-**快速开始：** [中文操作流程](docs/QUICKSTART-ZH.md) · [English Quick Start](docs/QUICKSTART.md) · [互操作协议 v1](docs/INTEROPERABILITY-ZH.md) · [IDE / 图原型](docs/IDE-GRAPH-ZH.md)
+**快速开始：** [中文操作流程](docs/QUICKSTART-ZH.md) · [English Quick Start](docs/QUICKSTART.md) · [已知限制](docs/KNOWN-LIMITATIONS-ZH.md) · [Changelog](CHANGELOG.md) · [互操作协议 v1](docs/INTEROPERABILITY-ZH.md)
 
 ## 为什么做这个项目
 
@@ -52,27 +52,26 @@ Human / IDE / Coding Agent
 
 ## 当前状态
 
-`v0.1.7` 是当前早期开源基线。
+`v0.2.0` 是第一版面向外部用户的可安装 Release。
 
 当前已经实现：
 
-- Go：基于 AST 的函数/方法、签名、注释、包信息、保守调用事实和 import 提取；
-- TypeScript / JavaScript：函数、import 和调用引用的保守静态提取；
-- Vue SFC：提取 `<script>` / `<script setup>` 后进行 TS/JS 分析；
-- SQL 与 HTTP Route：轻量确定性识别；
-- Tests：测试映射以及 typed `test_of` 边；
-- Typed Graph：`call`、`import`、`route_handler`、`api_request`、`db_read`、`db_write`、`test_of`、`page_api`；
+- Go：AST + `go/packages` / `go/types`，支持 package-aware 函数/方法、泛型和保守 interface 解析；
+- TypeScript / JavaScript：Compiler API、tsconfig/jsconfig path、re-export、import 与保守 call facts；
+- Vue SFC：使用 `@vue/compiler-sfc` 解析普通 script 与 `script setup`，并建立组件/composable 证据；
+- HTTP、SQL、CLI、Scheduled Job、Consumer 等静态入口与 Typed Graph；
+- Tests：保守测试映射与 typed `test_of` edge；
+- Typed Graph：Call、Import、Route、Client Request、DB Access、Test、Page/API、Non-HTTP Entry Handler；
 - Edge Confidence：`exact`、`static`、`inferred`、`unresolved`；
-- 有界图遍历：支持 forward / reverse，最多 6 hops，不沿 unresolved 边继续传播；
-- Cross-surface Retrieval：当图中存在可证明关系时，可以把页面、API、后端、数据库和测试证据组合到一次查询中；
-- Compact Query Output：CLI / MCP 共享同一套面向 Coding Agent 的 Compact projection；
-- SQLite + JSONL 索引、增量更新、Feature Freshness、CLI 查询和 MCP 只读接口。
+- 有界 forward / reverse Graph Traversal，不沿 unresolved edge 继续传播；
+- Cross-surface Retrieval 与 CLI/MCP Compact Output；
+- Public Index v1、SCIP Export、Plugin Protocol v1；
+- Public Node Locate 与单文件离线 Graph HTML；
+- Optional Semantic Provider v1：必须显式启用，只对确定性候选做有界 rerank，确定性核心仍是默认事实来源。
 
-WP7 在真实 Student Growth Companion 三组 Query 上，Compact 序列化输出约减少 93%，同时保持待读路径、coverage 状态和 tests。
+当前冻结的确定性 Ground Truth v6 为 TP=34、FP=1、FN=0；独立 Semantic Corpus v1 已验证 5 个 paraphrase case 的可量化 rerank 收益，并且不修改 Graph Facts。
 
-目前 TypeScript/Vue 分析仍然是保守实现。下一阶段先建立稳定的 Language Analyzer Contract，再接入 TypeScript Compiler API、Vue `@vue/compiler-sfc` 和更强的原生类型系统分析。
-
-CCE 的目标不是只支持 Go / TypeScript / JavaScript / Vue。未来可以通过 Analyzer Adapter 扩展 Java、Python、C/C++、C#、Rust 等语言，同时复用统一 Facts、Typed Graph、Retrieval 和 MCP。
+CCE 的架构并不限于 Go / TypeScript / JavaScript / Vue，但 Java、Python、C/C++、C#、Rust 等语言在 v0.2.0 中仍属于未来 Analyzer，而不是当前正式支持范围。
 
 ## 会生成什么
 
@@ -85,6 +84,7 @@ CCE 的目标不是只支持 Go / TypeScript / JavaScript / Vue。未来可以�
 ├── files.jsonl
 ├── symbols.jsonl
 ├── features.jsonl
+├── entry-points.jsonl
 ├── routes.jsonl
 ├── tables.jsonl
 ├── tests.jsonl
@@ -173,14 +173,30 @@ feature status → stale
 
 - Node.js 22.13+
 - Git
-- 如果需要分析 Go 项目，还需要 Go
+- 只有分析 Go 项目时才需要本机 Go
 
-## 从源码安装
+## 安装
+
+npm 正式发布后，推荐全局安装：
+
+```bash
+npm install -g code-context-engine
+cce --help
+```
+
+也可以不做全局安装，直接使用：
+
+```bash
+npx code-context-engine --help
+```
+
+贡献者仍然可以从源码安装：
 
 ```bash
 git clone https://github.com/qiuweiyu/code-context-engine.git
 cd code-context-engine
 npm install
+npm test
 ```
 
 ## CLI 使用
@@ -188,13 +204,13 @@ npm install
 建立或刷新索引：
 
 ```bash
-node src/cli.js index --repo /path/to/project
+cce index --repo /path/to/project
 ```
 
 根据开发任务查询相关上下文：
 
 ```bash
-node src/cli.js query \
+cce query \
   --repo /path/to/project \
   --task "编辑未发布的人工任务"
 ```
@@ -202,24 +218,24 @@ node src/cli.js query \
 给 ChatGPT、Codex 或其他 Coding Agent 使用时，可以请求 Compact 视图：
 
 ```bash
-node src/cli.js query \
+cce query \
   --repo /path/to/project \
   --task "编辑未发布的人工任务" \
   --compact
 ```
 
-不加 `--compact` 时，原有 Full 调试输出保持不变。
+不加 `--compact` 时，仍然保留 Full 调试输出。
 
 查看索引和 Feature 新鲜度：
 
 ```bash
-node src/cli.js status --repo /path/to/project
+cce status --repo /path/to/project
 ```
 
-强制全量重建：
+只有明确需要时才执行全量重建：
 
 ```bash
-node src/cli.js index --repo /path/to/project --force
+cce index --repo /path/to/project --force
 ```
 
 
@@ -256,6 +272,21 @@ CCE 不使用大模型翻译开发任务。为了让中文需求能够检索英�
 
 如果任务同时明确写了“管理端”“小程序”等多个代码 surface，最终 Top-N 会为已经被图发现且匹配这些显式意图的文件保留少量名额，避免一个 surface 的高分结果把另一个 surface 全部挤掉。
 
+## Optional Semantic Provider v1
+
+Semantic Provider 必须显式启用。确定性 Retriever 会先产生候选集合，Provider 只能在有限候选内 rerank，不能新增 Graph Fact、修改 Edge Confidence，也不能注入未知路径。
+
+例如：
+
+```bash
+cce query \
+  --repo /path/to/project \
+  --task "查找老师布置作业的位置" \
+  --semantic-provider /path/to/provider.json
+```
+
+Provider 超时、崩溃或返回非法结果时，CCE 会 fallback 到原确定性结果。CCE 自己构造的 Provider Request 不包含源码正文。详细协议见 [docs/SEMANTIC-PROVIDER-ZH.md](docs/SEMANTIC-PROVIDER-ZH.md)。
+
 ## MCP
 
 CCE 同时提供一个面向本地索引的 MCP Server。
@@ -266,13 +297,13 @@ CCE 同时提供一个面向本地索引的 MCP Server。
 - `context_query`
 - `context_index_status`
 
-MCP Server 本身不依赖模型，只允许访问 `CCE_ALLOWED_ROOTS` 指定目录下的仓库。`context_query` 支持可选的 `compact: true`，并与 CLI 复用同一套 Compact projection。
+MCP Server 本身不依赖模型，只允许访问 `CCE_ALLOWED_ROOTS` 指定目录下的仓库。`context_query` 支持可选 `compact: true` 和显式的仓库内 `semantic_provider`。
 
-例如：
+npm 全局安装后：
 
 ```bash
 export CCE_ALLOWED_ROOTS=/home/me/projects
-node src/server.js
+code-context-engine-mcp
 ```
 
 这样 Codex、ChatGPT、Claude Code 或其他支持 MCP 的工具，可以先查询 CCE，再决定真正需要读取哪些代码文件。
@@ -349,7 +380,8 @@ Query 现在有两种输出视图。默认 Full 视图保留 retrieval / graph �
 
 CCE 的核心目标之一是避免源码和敏感信息被无意发送到外部系统：
 
-- 核心引擎不进行网络请求；
+- 确定性核心不进行网络请求；
+- Semantic Provider v1 永远不会自动启用；用户显式配置的外部 Provider 属于独立进程，需要单独评估它自己的网络/隐私行为；
 - `.env`、私钥、证书、常见凭据文件和 lockfile 默认不参与源码索引；
 - 读取源码时不跟随 symlink；
 - MCP 访问路径由 `CCE_ALLOWED_ROOTS` 限制；
@@ -358,6 +390,14 @@ CCE 的核心目标之一是避免源码和敏感信息被无意发送到外部�
 - 不需要 AI 模型。
 
 需要注意：生成的索引本身仍然可能暴露项目结构，因此对于私有仓库，同样应按源码敏感级别保护 `.context-index`。
+
+## 已知限制
+
+CCE v0.2.0 不承诺完整还原运行时行为，也还没有正式支持 Java、Python、C/C++、C#、Rust 等一等 Analyzer。动态分派、反射、生成代码、配置驱动 wiring 和未覆盖的框架注册可能保持 unresolved。
+
+Semantic Provider v1 只能重排确定性 Retriever 已经给出的有限候选，不能把完全没有进入候选集合的文件“凭空找回来”。
+
+完整边界见 [docs/KNOWN-LIMITATIONS-ZH.md](docs/KNOWN-LIMITATIONS-ZH.md)。
 
 ## 架构
 
@@ -389,17 +429,9 @@ CLI / MCP / future IDE integrations
 
 WP7 之后的具体执行顺序见 [docs/DEVELOPMENT-PLAN-ZH.md](docs/DEVELOPMENT-PLAN-ZH.md)。
 
-近期计划：
+v0.2.0 之前规划的 Analyzer Contract、TypeScript Compiler API、Vue compiler-sfc、go/packages/go/types、Public Index v1、SCIP、Plugin Protocol v1、Locate、Offline Graph 以及 Optional Semantic Provider v1 已经落地。
 
-1. Language Analyzer Architecture & Plugin Contract；
-2. TypeScript Compiler API；
-3. Vue `@vue/compiler-sfc`；
-4. TypeScript / JavaScript module、re-export、path alias 解析；
-5. Go `go/packages` + `go/types`，随后 SSA / callgraph；
-6. 建立 Ground Truth Benchmark、Precision / Recall 和 Retrieval 质量指标；
-7. Contract 稳定后再增加 Java、Python Analyzer；
-8. WP15 已引入 Public Index v1、SCIP 导出和 Plugin Protocol v1；WP16 增加基于 Public Index 的编辑器定位与离线图可视化原型；
-9. 语义/Embedding/LLM Provider 只作为可选插件，不成为核心必需依赖。
+当前发布工作以 [ROADMAP.md](ROADMAP.md) 中的 WP18 为准。v0.2.0 之后优先处理更广语言生态、规模 Benchmark 和额外 Flow 类型，而不是回退重做已完成的 WP9–WP17。
 
 ## 非目标
 
