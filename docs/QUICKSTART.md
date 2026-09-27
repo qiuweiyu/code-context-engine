@@ -120,6 +120,20 @@ If business terms in task descriptions do not match source identifiers, add `.co
 
 Aliases are loaded at query time, so changing this file does not require re-indexing.
 
+## Public interoperability
+
+After indexing, the stable external graph export is available at `.context-index/public/v1/`. External consumers should use Public Index v1 instead of binding to internal SQLite tables or internal JSONL files.
+
+To export SCIP explicitly:
+
+```powershell
+node .\src\cli.js export-scip --repo "D:\Path\To\YourProject" --out "D:\Path\To\index.scip"
+```
+
+SCIP export is not automatic. It emits symbol information and only emits definition occurrences when a unique source byte range can be proven. Plugin Protocol v1 defines validated JSON messages only; WP15 does not auto-discover or execute repository plugin commands.
+
+See [INTEROPERABILITY.md](INTEROPERABILITY.md) for Public Index v1 compatibility, migration examples, SCIP scope and Plugin Protocol v1.
+
 ## Incremental workflow
 
 After code changes, run the same index command again:

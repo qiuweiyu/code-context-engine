@@ -118,6 +118,20 @@ node .\src\cli.js flow --repo "D:\Path\To\YourProject" --start "entry:job:cmd/wo
 
 WP14 只识别有静态依据的入口模式（如 Go `package main`、直接 cron 注册、直接 consumer/queue 注册）。TS/JS 的简单 handler 只在同文件内解析，Go handler 可在同目录同 package 内解析；跨文件 TS/JS 或其他证据不足/有歧义的 handler 保持 unresolved，不猜运行时目标。
 
+## 公共互操作
+
+完成索引后，稳定的外部图导出位于 `.context-index/public/v1/`。外部消费者应使用 Public Index v1，不要绑定内部 SQLite 表或内部 JSONL 文件。
+
+显式导出 SCIP：
+
+```powershell
+node .\src\cli.js export-scip --repo "D:\Path\To\YourProject" --out "D:\Path\To\index.scip"
+```
+
+SCIP 不会自动导出；只有能够证明唯一源码 byte range 的定义才会生成 definition occurrence。Plugin Protocol v1 目前只定义和校验 JSON 消息，WP15 不会自动发现或执行仓库里的插件命令。
+
+Public Index v1 兼容规则、迁移示例、SCIP 范围和 Plugin Protocol v1 见 [INTEROPERABILITY-ZH.md](INTEROPERABILITY-ZH.md)。
+
 ## 项目业务词别名
 
 如果需求描述中的业务词与源码英文命名没有直接词法关系，可以在项目根目录增加：
