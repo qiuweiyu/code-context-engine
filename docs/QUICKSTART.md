@@ -134,6 +134,24 @@ SCIP export is not automatic. It emits symbol information and only emits definit
 
 See [INTEROPERABILITY.md](INTEROPERABILITY.md) for Public Index v1 compatibility, migration examples, SCIP scope and Plugin Protocol v1.
 
+## IDE locate and offline graph
+
+Locate a Public Index node without launching an editor:
+
+```powershell
+node .\src\cli.js locate --repo "D:\Path\To\YourProject" --node "symbol:typescript:src/app.ts::Handle"
+```
+
+Generate a self-contained offline graph viewer:
+
+```powershell
+node .\src\cli.js graph-html --repo "D:\Path\To\YourProject" --out ".\cce-graph.html"
+```
+
+Use `--focus <public-node-id> --max-nodes 120 --max-hops 3` for a bounded neighborhood. The viewer reads Public Index v1 only, embeds no repository source text, uses no CDN, and preserves unresolved evidence as unresolved.
+
+See [IDE-GRAPH.md](IDE-GRAPH.md) for the prototype boundary and navigation behavior.
+
 ## Incremental workflow
 
 After code changes, run the same index command again:

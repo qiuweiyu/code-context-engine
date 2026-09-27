@@ -9,6 +9,8 @@ import { exportIndex } from "./context/export.js";
 import { buildRepositoryFlowManifest } from "./context/flow-manifest.js";
 import { serializeQueryOutput } from "./context/query-output.js";
 import { exportScipIndex } from "./public/scip.js";
+import { locatePublicNode } from "./public/locate.js";
+import { exportGraphHtml } from "./public/graph-html.js";
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(name);
@@ -24,7 +26,7 @@ function args(name) {
 function has(name) { return process.argv.includes(name); }
 function print(value) { process.stdout.write(JSON.stringify(value, null, 2) + "\n"); }
 function usage() {
-  process.stderr.write(`Code Context Engine v0.1.7\n\nCommands:\n  index --repo <path> [--force]\n  query --repo <path> --task <text> [--max-files 12] [--compact]\n  flow --repo <path> --start <node-id> [--start <node-id>...] [--direction forward|reverse] [--max-hops 3] [--branch-limit 8] [--node-limit 128] [--min-confidence static] [--edge-types entry_handler,api_request,route_handler]\n  export-scip --repo <path> --out <file.scip> [--repository <name>]\n  status --repo <path>\n  review-feature --repo <path> --feature <id> [--note <text>]\n\nGenerated data lives in <repo>/.context-index. Feature definitions live in <repo>/.context-features/*.json.\n`);
+  process.stderr.write(`Code Context Engine v0.1.7\n\nCommands:\n  index --repo <path> [--force]\n  query --repo <path> --task <text> [--max-files 12] [--compact]\n  flow --repo <path> --start <node-id> [--start <node-id>...] [--direction forward|reverse] [--max-hops 3] [--branch-limit 8] [--node-limit 128] [--min-confidence static] [--edge-types entry_handler,api_request,route_handler]\n  locate --repo <path> --node <public-node-id> [--editor vscode|file]\n  graph-html --repo <path> --out <graph.html> [--focus <public-node-id>] [--max-nodes 250] [--max-hops 3]\n  export-scip --repo <path> --out <file.scip> [--repository <name>]\n  status --repo <path>\n  review-feature --repo <path> --feature <id> [--note <text>]\n\nGenerated data lives in <repo>/.context-index. Feature definitions live in <repo>/.context-features/*.json.\n`);
 }
 
 const cmd = process.argv[2];
@@ -52,6 +54,26 @@ try {
       edgeTypes: rawEdgeTypes
         ? rawEdgeTypes.split(",").map((value) => value.trim()).filter(Boolean)
         : null
+    }));
+  } else if (cmd === "locate") {
+    const nodeId = arg("--node");
+    if (!nodeId) throw new Error("--node is required");
+    print(await locatePublicNode({
+      repoRoot: repo,
+      indexDir: path.join(repo, ".context-index"),
+      nodeId,
+      editor: arg("--editor", "vscode")
+    }));
+  } else if (cmd === "graph-html") {
+    const out = arg("--out");
+    if (!out) throw new Error("--out is required");
+    print(await exportGraphHtml({
+      repoRoot: repo,
+      indexDir: path.join(repo, ".context-index"),
+      outFile: path.resolve(out),
+      focusNodeId: arg("--focus"),
+      maxNodes: Number(arg("--max-nodes", "250")),
+      maxHops: Number(arg("--max-hops", "3"))
     }));
   } else if (cmd === "export-scip") {
     const out = arg("--out");

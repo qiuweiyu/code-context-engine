@@ -132,6 +132,24 @@ SCIP 不会自动导出；只有能够证明唯一源码 byte range 的定义才
 
 Public Index v1 兼容规则、迁移示例、SCIP 范围和 Plugin Protocol v1 见 [INTEROPERABILITY-ZH.md](INTEROPERABILITY-ZH.md)。
 
+## IDE 定位与离线图
+
+只返回 Public Index 节点对应的编辑器/文件 URI，不自动启动编辑器：
+
+```powershell
+node .\src\cli.js locate --repo "D:\Path\To\YourProject" --node "symbol:typescript:src/app.ts::Handle"
+```
+
+生成单文件离线图查看器：
+
+```powershell
+node .\src\cli.js graph-html --repo "D:\Path\To\YourProject" --out ".\cce-graph.html"
+```
+
+可使用 `--focus <public-node-id> --max-nodes 120 --max-hops 3` 只导出有界邻域。查看器只消费 Public Index v1，不嵌入仓库源码正文、不使用 CDN，并保持 unresolved evidence 的 unresolved 状态。
+
+原型边界与源码导航规则见 [IDE-GRAPH-ZH.md](IDE-GRAPH-ZH.md)。
+
 ## 项目业务词别名
 
 如果需求描述中的业务词与源码英文命名没有直接词法关系，可以在项目根目录增加：
