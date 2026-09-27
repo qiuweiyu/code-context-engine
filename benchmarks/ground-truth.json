@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "cases": [
     {
       "name": "vue-ts-go-http",
@@ -318,6 +318,43 @@
           "type": "call",
           "from": "symbol:typescript:src/loader.ts::load",
           "to": "symbol:typescript:src/target.ts::go",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "vue-component-composable",
+      "fixture": "vue-component-composable",
+      "query": "Dashboard useUsers UserCard",
+      "maxFiles": 6,
+      "relevantFiles": [
+        "src/pages/Dashboard.vue",
+        "src/components/UserCard.vue",
+        "src/composables/useUsers.ts"
+      ],
+      "edges": [
+        {
+          "type": "import",
+          "from": "file:src/pages/Dashboard.vue",
+          "to": "file:src/components/UserCard.vue",
+          "present": true
+        },
+        {
+          "type": "import",
+          "from": "file:src/pages/Dashboard.vue",
+          "to": "file:src/composables/useUsers.ts",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:vue:src/pages/Dashboard.vue::loadUsers",
+          "to": "symbol:typescript:src/composables/useUsers.ts::useUsers",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:vue:src/pages/Dashboard.vue::loadUsers",
+          "to": "ref:call:useUsers",
           "present": false
         }
       ]

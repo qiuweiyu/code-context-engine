@@ -141,6 +141,80 @@ function callCandidateInScope(dep, candidate) {
   return candidate.file_path === dep.from_file;
 }
 
+function buildVueImportBindingIndex(db) {
+  const index = new Map();
+  const rows = db.prepare(
+    "SELECT id,from_file,to_file,to_ref,metadata_json FROM dependencies WHERE relation='imports' AND to_file IS NOT NULL ORDER BY id"
+  ).all();
+  for (const row of rows) {
+    const metadata = parseJson(row.metadata_json, {});
+    const bindings = Array.isArray(metadata.import_bindings)
+      ? metadata.import_bindings
+      : [];
+    for (const binding of bindings) {
+      const local = String(binding?.local ?? "");
+      if (!local) continue;
+      if (!index.has(row.from_file)) index.set(row.from_file, new Map());
+      const byLocal = index.get(row.from_file);
+      if (!byLocal.has(local)) byLocal.set(local, []);
+      byLocal.get(local).push({
+        import_id: row.id,
+        module_ref: row.to_ref,
+        module_file: row.to_file,
+        kind: binding.kind,
+        imported: binding.imported,
+        local
+      });
+    }
+  }
+  return index;
+}
+
+function resolveVueImportedCall(dep, raw, bindingIndex, symbolsByFile) {
+  if (dep.from_language !== "vue") return null;
+  const parts = raw.split(".");
+  const root = parts[0];
+  const byLocal = bindingIndex.get(dep.from_file);
+  if (!byLocal) return null;
+
+  let bindings = [];
+  let importedName = null;
+  if (parts.length === 1) {
+    bindings = (byLocal.get(root) ?? [])
+      .filter((binding) => binding.kind === "named");
+    if (bindings.length === 1) importedName = bindings[0].imported;
+  } else if (parts.length === 2) {
+    bindings = (byLocal.get(root) ?? [])
+      .filter((binding) => binding.kind === "namespace");
+    if (bindings.length === 1) importedName = parts[1];
+  } else {
+    return null;
+  }
+
+  if (bindings.length === 0) return null;
+  if (bindings.length !== 1 || !importedName) {
+    return {
+      resolved: null,
+      resolution: "vue_import_binding_ambiguous",
+      candidateCount: bindings.length
+    };
+  }
+
+  const binding = bindings[0];
+  const candidates = (symbolsByFile.get(binding.module_file) ?? [])
+    .filter((symbol) => symbol.name === importedName);
+  return {
+    resolved: candidates.length === 1 ? candidates[0] : null,
+    resolution: candidates.length === 1
+      ? "vue_import_binding_symbol"
+      : (candidates.length > 1
+        ? "vue_import_target_ambiguous"
+        : "vue_import_target_missing"),
+    candidateCount: candidates.length,
+    binding
+  };
+}
+
 function resolveDependencies(db) {
   const symbols = db.prepare(
     `SELECT s.symbol_id,s.file_path,s.language,s.name,s.qualified_name,s.receiver,s.params_json,s.returns_json,
@@ -151,14 +225,18 @@ function resolveDependencies(db) {
 
   const byQualified = new Map();
   const byName = new Map();
+  const symbolsByFile = new Map();
   const receiverGroups = new Map();
   const symbolIds = new Set(symbols.map((symbol) => symbol.symbol_id));
+  const vueImportBindings = buildVueImportBindingIndex(db);
 
   for (const symbol of symbols) {
     if (!byQualified.has(symbol.qualified_name)) byQualified.set(symbol.qualified_name, []);
     byQualified.get(symbol.qualified_name).push(symbol);
     if (!byName.has(symbol.name)) byName.set(symbol.name, []);
     byName.get(symbol.name).push(symbol);
+    if (!symbolsByFile.has(symbol.file_path)) symbolsByFile.set(symbol.file_path, []);
+    symbolsByFile.get(symbol.file_path).push(symbol);
 
     if (!symbol.receiver || symbol.is_test) continue;
     const receiverBase = goTypeBase(symbol.receiver);
@@ -208,6 +286,31 @@ function resolveDependencies(db) {
       );
       continue;
     }
+
+    const vueImported = resolveVueImportedCall(
+      dep, raw, vueImportBindings, symbolsByFile
+    );
+    if (vueImported) {
+      update.run(
+        vueImported.resolved?.symbol_id ?? null,
+        JSON.stringify({
+          ...metadata,
+          resolution: vueImported.resolution,
+          candidate_count: vueImported.candidateCount,
+          ...(vueImported.binding ? {
+            import_source_id: vueImported.binding.import_id,
+            module_ref: vueImported.binding.module_ref,
+            module_file: vueImported.binding.module_file,
+            binding_kind: vueImported.binding.kind,
+            local_binding: vueImported.binding.local,
+            imported_name: vueImported.binding.imported
+          } : {})
+        }),
+        dep.id
+      );
+      continue;
+    }
+
     const tail = raw.split(".").pop();
     const exact = (byQualified.get(raw) ?? [])
       .filter((candidate) => callCandidateInScope(dep, candidate));
@@ -380,6 +483,12 @@ function isCompilerScriptLanguage(language) {
   return language === "typescript" || language === "javascript";
 }
 
+function canAffectVueModuleResolution(language) {
+  return language === "typescript"
+    || language === "javascript"
+    || language === "vue";
+}
+
 function isCompilerProjectConfig(relPath) {
   return /(?:^|\/)(?:tsconfig|jsconfig)(?:\.[^/]*)?\.json$/i.test(
     String(relPath ?? "").replaceAll("\\", "/")
@@ -424,6 +533,7 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
     const skippedPaths = new Set();
     const compilerSeeds = [];
     let compilerStructureChanged = false;
+    let vueStructureChanged = false;
     let compilerConfigChanged = removed.some(isCompilerProjectConfig);
 
     for (const relPath of tracked) {
@@ -465,11 +575,15 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
         compilerSeeds.push(relPath);
         if (!old) compilerStructureChanged = true;
       }
+      if (!old && contentChanged && canAffectVueModuleResolution(language)) {
+        vueStructureChanged = true;
+      }
     }
 
     for (const filePath of removed) {
       const oldLanguage = db.prepare("SELECT language FROM files WHERE path=?").get(filePath)?.language;
       if (isCompilerScriptLanguage(oldLanguage)) compilerSeeds.push(filePath);
+      if (canAffectVueModuleResolution(oldLanguage)) vueStructureChanged = true;
     }
 
     if (compilerConfigChanged || compilerStructureChanged) {
@@ -482,6 +596,14 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
       addCompilerReverseInvalidations(
         db, compilerSeeds, snapshots, pendingMap, skippedPaths
       );
+    }
+
+    if (vueStructureChanged) {
+      for (const item of snapshots.values()) {
+        if (item.language !== "vue") continue;
+        pendingMap.set(item.relPath, item);
+        skippedPaths.delete(item.relPath);
+      }
     }
     const pending = [...pendingMap.values()];
 

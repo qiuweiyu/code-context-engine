@@ -1,6 +1,6 @@
 import { analyzeGoFiles } from "./go-runner.js";
-import { analyzeScriptFile } from "./analyze-script.js";
 import { analyzeTypeScriptFiles, TYPESCRIPT_ANALYZER_VERSION } from "./analyze-typescript.js";
+import { analyzeVueFiles, VUE_ANALYZER_VERSION } from "./analyze-vue.js";
 import { extractDbObjects, extractRoutes } from "./analyze-common.js";
 import { PARSER_VERSION } from "./schema.js";
 
@@ -21,18 +21,15 @@ function descriptor(id, languages, version, evidence, capabilities, analyze) {
 export function createAnalyzerRegistry({
   goVersion = "1",
   scriptVersion = TYPESCRIPT_ANALYZER_VERSION,
-  vueVersion = "1",
+  vueVersion = VUE_ANALYZER_VERSION,
   textVersion = "1",
   goAnalyze = ({ repoRoot, items }) => analyzeGoFiles(repoRoot, items.map((item) => item.relPath)),
   scriptAnalyze = ({ repoRoot, items, trackedSet }) => analyzeTypeScriptFiles({
     repoRoot, items, trackedSet
   }),
-  vueAnalyze = ({ items, trackedSet }) => new Map(items.map((item) => [
-    item.relPath, analyzeScriptFile({
-      text: item.text, relPath: item.relPath,
-      language: item.language, trackedSet
-    })
-  ]))
+  vueAnalyze = ({ items, trackedSet }) => analyzeVueFiles({
+    items, trackedSet
+  })
 } = {}) {
   return Object.freeze([
     descriptor("go-ast", ["go"], goVersion, "ast",
@@ -41,7 +38,7 @@ export function createAnalyzerRegistry({
     descriptor("typescript-compiler", ["typescript", "javascript"], scriptVersion, "ast",
       { symbols: "static", imports: "static", calls: "static", types: "static", exactResolution: "static" },
       scriptAnalyze),
-    descriptor("script-regex", ["vue"], vueVersion, "text",
+    descriptor("vue-compiler-sfc", ["vue"], vueVersion, "compiler_sfc",
       { symbols: "heuristic", imports: "heuristic", calls: "heuristic", types: "unsupported", exactResolution: "unsupported" },
       vueAnalyze),
     descriptor("text-facts", ["*"], textVersion, "text",

@@ -35,7 +35,7 @@ Ubuntu: `/opt/CCE/code-context-engine`, Node 22.22.1, Go 1.26.0. CI uses Node 22
 
 ## 4. Revised engineering sequence (2026-09-27)
 
-This sequence supersedes the earlier ordering that placed the first accuracy corpus at WP14. WP8-A and WP8-B are merged. WP9 is in progress on `work/cce-wp9-ts-compiler-resolution`; later packages remain planned. An analyzer change must be measured against a frozen corpus, not just the regression suite.
+This sequence supersedes the earlier ordering that placed the first accuracy corpus at WP14. WP8-A, WP8-B and WP9 are merged. WP10 is the current package on `work/cce-wp10-vue-compiler-sfc`; later packages remain planned. An analyzer change must be measured against a frozen corpus, not just the regression suite.
 
 | Package | Goal and scope | Non-goals / dependency | Acceptance and risk |
 | --- | --- | --- | --- |

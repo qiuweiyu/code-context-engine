@@ -1,6 +1,6 @@
 # Internal Language Analyzer Contract (WP8-B)
 
-This is an **internal** boundary, version 1, implemented in `src/context/analyzers.js`. It is not a public plugin ABI. Go remains on the Go AST analyzer; WP9 moves tracked TypeScript/JavaScript to a TypeScript Compiler API analyzer while Vue remains on the existing script-regex path until WP10. `text-facts` is the fallback for tracked files without a dedicated analyzer, including SQL and future language extensions. WP9 pins `typescript@6.0.3` because the TypeScript 7 line does not currently expose the stable Program/TypeChecker API used by this analyzer.
+This is an **internal** boundary, version 1, implemented in `src/context/analyzers.js`. It is not a public plugin ABI. Go remains on the Go AST analyzer; WP9 moves tracked TypeScript/JavaScript to a TypeScript Compiler API analyzer; WP10 moves Vue SFC structure to `@vue/compiler-sfc@3.5.43` while preserving conservative script-level fact extraction. `text-facts` is the fallback for tracked files without a dedicated analyzer, including SQL and future language extensions. WP9 pins `typescript@6.0.3` because the TypeScript 7 line does not currently expose the stable Program/TypeChecker API used by this analyzer.
 
 ## Dispatch and facts
 
@@ -13,7 +13,7 @@ The normalized result for a complete file includes:
 - optional package name and diagnostics;
 - in-memory fact `provenance` with analyzer ID/version, parser version and AST/text-pattern evidence.
 
-The existing schema 8 stores the established symbol/dependency/route/DB columns. Fact provenance is available at normalization time; it is **not yet a persisted public fact schema**. Existing node IDs, edge builders, graph traversal and retrieval ranking stay in place. Graph facts still distinguish `exact`, `static`, `inferred`, and `unresolved` through their established evidence. A language adapter should not claim `exact` merely because it uses an AST.
+The existing schema 8 stores the established symbol/dependency/route/DB columns. Fact provenance is available at normalization time; it is **not yet a persisted public fact schema**. Existing node IDs, edge builders, graph traversal and retrieval ranking stay in place. Graph facts still distinguish `exact`, `static`, `inferred`, and `unresolved` through their established evidence. A language adapter should not claim `exact` merely because it uses an AST. The Vue adapter uses compiler-sfc only for authoritative SFC block structure/locations, analyzes both normal script and script setup against original source offsets, filters compiler macros from project-call evidence, and never treats generated compileScript output as source evidence.
 
 ## Failure boundary
 
@@ -23,7 +23,7 @@ An unreadable source, analyzer exception, Go parser error, missing result, malfo
 
 ## Incremental versions
 
-The existing `files.parser_version` column contains `<global parser version>/contract1/<analyzer ID>@<analyzer version>`. Analyzer-version changes still invalidate only that analyzer's files. WP9 additionally treats TypeScript/JavaScript resolution as cross-file state: a changed script invalidates tracked TS/JS reverse importers transitively, while a new script or a changed/removed `tsconfig`/`jsconfig` invalidates the tracked compiler-script set for that project pass. Warm indexes remain unchanged when hashes, parser versions and configuration are stable. Changes to the shared route/DB text extractor or normalized contract should still bump the global parser or contract version because they affect multiple languages.
+The existing `files.parser_version` column contains `<global parser version>/contract1/<analyzer ID>@<analyzer version>`. Analyzer-version changes still invalidate only that analyzer's files. WP9 additionally treats TypeScript/JavaScript resolution as cross-file state: a changed script invalidates tracked TS/JS reverse importers transitively, while a new script or a changed/removed `tsconfig`/`jsconfig` invalidates the tracked compiler-script set for that project pass. WP10 reanalyzes Vue files when tracked TS/JS/Vue files are added or removed because relative/module targets can become resolvable without the Vue source changing; normal target-content changes reuse stored imports and the global dependency resolver refreshes the unique target symbol. Warm indexes remain unchanged when hashes, parser versions and repository structure are stable. Changes to the shared route/DB text extractor or normalized contract should still bump the global parser or contract version because they affect multiple languages.
 
 ## Adding an analyzer later
 
