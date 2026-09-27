@@ -347,3 +347,7 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 MIT
+
+## Analyzer quality baseline
+
+Run `npm run benchmark` to inspect labeled graph edges, query relevance and indexing cost. The small seed corpus includes a known TypeScript barrel miss; see [benchmark guide](docs/BENCHMARKS.md).

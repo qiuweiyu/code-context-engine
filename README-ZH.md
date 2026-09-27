@@ -419,3 +419,7 @@ CCE 不是：
 ## License
 
 MIT
+
+## 分析器质量基线
+
+运行 `npm run benchmark` 查看已标注图边、查询命中和索引成本。起步语料保留了一个已知的 TypeScript barrel 漏检；详见 [Benchmark 说明](docs/BENCHMARKS.md)。

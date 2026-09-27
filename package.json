@@ -15,6 +15,7 @@
   "scripts": {
     "start:mcp": "node src/server.js",
     "test": "node --test test/*.test.mjs",
+    "benchmark": "node benchmarks/run.mjs",
     "index": "node src/cli.js index",
     "query": "node src/cli.js query",
     "status": "node src/cli.js status"
