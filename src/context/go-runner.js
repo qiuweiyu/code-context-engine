@@ -91,6 +91,10 @@ async function helperBinary() {
   return cachedBinaryPromise;
 }
 
+export async function prepareGoAnalyzer() {
+  await helperBinary();
+}
+
 export async function analyzeGoFiles(repoRoot, files) {
   if (!files.length) return new Map();
   const binary = await helperBinary();

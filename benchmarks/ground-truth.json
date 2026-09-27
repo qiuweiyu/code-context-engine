@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "cases": [
     {
       "name": "vue-ts-go-http",
@@ -391,6 +391,68 @@
           "type": "call",
           "from": "symbol:go:service/service.go::ViaInterface",
           "to": "symbol:go:store/store.go::FileReader.Read",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "go-workspace-cross-module",
+      "fixture": "go-workspace",
+      "query": "Use Format workspace lib",
+      "maxFiles": 6,
+      "relevantFiles": [
+        "app/main.go",
+        "lib/lib.go"
+      ],
+      "edges": [
+        {
+          "type": "call",
+          "from": "symbol:go:app/main.go::Use",
+          "to": "symbol:go:lib/lib.go::Format",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:go:app/main.go::Use",
+          "to": "symbol:go:app/noise/noise.go::Format",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "ts-multi-config-isolation",
+      "fixture": "ts-multi-project",
+      "query": "loadA loadB fetchUsers",
+      "maxFiles": 8,
+      "relevantFiles": [
+        "packages/a/src/page.ts",
+        "packages/a/src/api/users.ts",
+        "packages/b/src/page.ts",
+        "packages/b/src/api/users.ts"
+      ],
+      "edges": [
+        {
+          "type": "call",
+          "from": "symbol:typescript:packages/a/src/page.ts::loadA",
+          "to": "symbol:typescript:packages/a/src/api/users.ts::fetchUsers",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:typescript:packages/a/src/page.ts::loadA",
+          "to": "symbol:typescript:packages/b/src/api/users.ts::fetchUsers",
+          "present": false
+        },
+        {
+          "type": "call",
+          "from": "symbol:typescript:packages/b/src/page.ts::loadB",
+          "to": "symbol:typescript:packages/b/src/api/users.ts::fetchUsers",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:typescript:packages/b/src/page.ts::loadB",
+          "to": "symbol:typescript:packages/a/src/api/users.ts::fetchUsers",
           "present": false
         }
       ]

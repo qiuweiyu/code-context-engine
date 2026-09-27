@@ -10,7 +10,7 @@ schema 8 的原有列、符号 ID、图边、遍历和检索排序没有换版�
 
 ## 失败处理
 
-源码无法读取、分析器异常、Go 语法错误、缺少输出、无效 Fact 或明确声明的 partial 结果，都会生成带文件路径的诊断。失败文件不会被写成“解析成功但零符号”；已有索引事实暂时保留，下一轮无论 hash 是否变化都重试。`go/packages` 加载/类型错误属于另一类：WP11 保留可解析的 AST facts，输出 `go_packages_error` 警告，并让受影响的 typed call 保持 unresolved，不删除整个文件结果，也不猜目标。其他成功文件可正常入库。
+源码无法读取、分析器异常、Go 语法错误、缺少输出、无效 Fact 或明确声明的 partial 结果，都会生成带文件路径的诊断。失败文件不会被写成“解析成功但零符号”；已有索引事实暂时保留，下一轮无论 hash 是否变化都重试。`go/packages` 加载/类型错误属于另一类：WP11 保留可解析的 AST facts，输出 `go_packages_error` 警告，并让受影响的 typed call 保持 unresolved，不删除整个文件结果，也不猜目标。目标仓库的 package 加载固定为离线、只读模式（`GOPROXY=off`、`GOSUMDB=off`、`GOTOOLCHAIN=local`、`-mod=readonly`），缺失模块或工具链会变成诊断，不会暗中联网下载；这不影响 CCE 自己的 helper 构建依赖，由开发/CI 环境正常安装。其他成功文件可正常入库。
 
 `index` 返回 `analysis_failed_files` 和诊断；最新诊断保存在 SQLite meta，可由 `status` 和 Full query 看到。有失败文件且查到候选时，查询覆盖状态会变成 `review_required`；Compact 返回失败文件数。修复成功后清除诊断。保留旧事实不等于旧事实仍代表当前坏文件，开发者应先查看诊断。
 
