@@ -33,9 +33,9 @@ The deterministic core remains the default; Semantic Provider v1 remains explici
 
 ## Quality gate
 
-- [ ] `npm test` passes.
-- [ ] deterministic `benchmark:gate` passes.
-- [ ] `benchmark:semantic:gate` passes.
+- [x] `npm test` passes.
+- [x] deterministic `benchmark:gate` passes.
+- [x] `benchmark:semantic:gate` passes.
 - [x] `npm run release:smoke` passes.
 - [ ] Ubuntu CI passes.
 - [ ] Windows CI passes.
