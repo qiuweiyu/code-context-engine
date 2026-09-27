@@ -371,6 +371,17 @@ func nearestModuleDir(root, rel string) string {
 	}
 }
 
+func setEnvValue(env []string, key, value string) []string {
+	prefix := key + "="
+	for i, item := range env {
+		if strings.HasPrefix(item, prefix) {
+			env[i] = prefix + value
+			return env
+		}
+	}
+	return append(env, prefix+value)
+}
+
 func readonlyGoEnv() []string {
 	env := append([]string{}, os.Environ()...)
 	flags := strings.TrimSpace(os.Getenv("GOFLAGS"))
@@ -381,14 +392,11 @@ func readonlyGoEnv() []string {
 			flags += " -mod=readonly"
 		}
 	}
-	prefix := "GOFLAGS="
-	for i, item := range env {
-		if strings.HasPrefix(item, prefix) {
-			env[i] = prefix + flags
-			return env
-		}
-	}
-	return append(env, prefix+flags)
+	env = setEnvValue(env, "GOFLAGS", flags)
+	env = setEnvValue(env, "GOPROXY", "off")
+	env = setEnvValue(env, "GOSUMDB", "off")
+	env = setEnvValue(env, "GOTOOLCHAIN", "local")
+	return env
 }
 
 func goSymbolID(fset *token.FileSet, rel string, fn *ast.FuncDecl) string {
@@ -542,6 +550,35 @@ func packageErrors(pkg *packages.Package) []Diagnostic {
 	return out
 }
 
+func packageGraph(roots []*packages.Package) []*packages.Package {
+	seen := map[*packages.Package]bool{}
+	out := []*packages.Package{}
+	var visit func(*packages.Package)
+	visit = func(pkg *packages.Package) {
+		if pkg == nil || seen[pkg] {
+			return
+		}
+		seen[pkg] = true
+		out = append(out, pkg)
+		keys := make([]string, 0, len(pkg.Imports))
+		for path := range pkg.Imports {
+			keys = append(keys, path)
+		}
+		sort.Strings(keys)
+		for _, path := range keys {
+			visit(pkg.Imports[path])
+		}
+	}
+	orderedRoots := append([]*packages.Package{}, roots...)
+	sort.Slice(orderedRoots, func(i, j int) bool {
+		return orderedRoots[i].ID < orderedRoots[j].ID
+	})
+	for _, pkg := range orderedRoots {
+		visit(pkg)
+	}
+	return out
+}
+
 func buildTypedState(root string, files []string) TypedState {
 	state := TypedState{
 		CallsBySymbol:     map[string]map[string]TypedCall{},
@@ -595,7 +632,7 @@ func buildTypedState(root string, files []string) TypedState {
 		fileToPackage := map[string]*packages.Package{}
 		fileToSyntax := map[string]*ast.File{}
 
-		for _, pkg := range loaded {
+		for _, pkg := range packageGraph(loaded) {
 			if pkg == nil || pkg.Fset == nil {
 				continue
 			}

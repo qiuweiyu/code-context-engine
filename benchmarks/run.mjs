@@ -10,6 +10,7 @@ import { indexRepository } from "../src/context/indexer.js";
 import { queryContext } from "../src/context/retriever.js";
 import { projectQueryOutput } from "../src/context/query-output.js";
 import { openStore } from "../src/context/store.js";
+import { prepareGoAnalyzer } from "../src/context/go-runner.js";
 
 const exec = promisify(execFile);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -83,6 +84,9 @@ async function runCase(spec) {
     await fs.rm(root, { recursive: true, force: true });
   }
 }
+
+// Keep one-time Go helper compilation/download outside per-case timing.
+await prepareGoAnalyzer();
 
 const cases = [];
 for (const spec of corpus.cases) cases.push(await runCase(spec));
