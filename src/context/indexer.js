@@ -6,10 +6,7 @@ import { sha256Text } from "./hash.js";
 import { detectLanguage, isTestPath } from "./language.js";
 import { normalizeRel } from "./utils.js";
 import { openStore, transaction } from "./store.js";
-import { PARSER_VERSION } from "./schema.js";
-import { analyzeGoFiles } from "./go-runner.js";
-import { analyzeScriptFile } from "./analyze-script.js";
-import { extractDbObjects, extractRoutes } from "./analyze-common.js";
+import { DEFAULT_ANALYZERS, analyzePendingFiles, parserVersionFor } from "./analyzers.js";
 import { loadFeatureDefinitions, markFeaturesForFileChange, markFeaturesForSymbolChange, refreshFeatureStatus, syncFeatureDefinitions } from "./features.js";
 import { exportIndex } from "./export.js";
 import { rebuildApiRequestEdges, rebuildDbObjectEdges, rebuildDependencyEdges, rebuildPageApiEdges, rebuildRouteHandlerEdges, rebuildTestEdges } from "./edges.js";
@@ -34,7 +31,7 @@ function insertAnalysis(db, relPath, language, hash, text, analysis, now) {
       language,
       hash,
       lineCount,
-      PARSER_VERSION,
+      analysis.parser_version,
       now,
       isTestPath(relPath) ? 1 : 0,
       language === "go" ? (analysis.package ?? null) : null
@@ -61,7 +58,7 @@ function insertAnalysis(db, relPath, language, hash, text, analysis, now) {
 
   const symbols = analysis.symbols ?? [];
   const routeStmt = db.prepare(`INSERT INTO routes(file_path,symbol_id,method,route_path,direction,line,handler_ref,handler_owner_type,handler_symbol_id) VALUES(?,?,?,?,?,?,?,?,?)`);
-  for (const route of extractRoutes(text, relPath, symbols)) {
+  for (const route of analysis.routes) {
     routeStmt.run(
       relPath,
       route.symbol_id,
@@ -76,7 +73,7 @@ function insertAnalysis(db, relPath, language, hash, text, analysis, now) {
   }
 
   const dbStmt = db.prepare(`INSERT INTO db_objects(file_path,symbol_id,object_type,object_name,operation,line) VALUES(?,?,?,?,?,?)`);
-  for (const obj of extractDbObjects(text, relPath, symbols)) dbStmt.run(relPath, obj.symbol_id, obj.object_type, obj.object_name, obj.operation, obj.line);
+  for (const obj of analysis.dbObjects) dbStmt.run(relPath, obj.symbol_id, obj.object_type, obj.object_name, obj.operation, obj.line);
 }
 
 function normalizeGoType(value) {
@@ -364,7 +361,7 @@ function markOldFeatureRefs(db, filePath, oldSymbols, newSymbolMap, now) {
   markFeaturesForSymbolChange(db, changedIds);
 }
 
-export async function indexRepository({ repoRoot, indexDir = ".context-index", force = false } = {}) {
+export async function indexRepository({ repoRoot, indexDir = ".context-index", force = false, analyzerRegistry = DEFAULT_ANALYZERS } = {}) {
   const gitRoot = await resolveGitRoot(repoRoot);
   const outDir = path.isAbsolute(indexDir) ? indexDir : path.join(gitRoot, indexDir);
   const { db, dbPath } = openStore(outDir);
@@ -376,18 +373,46 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
     const existingMap = new Map(existing.map((r)=>[r.path,r]));
     const removed = existing.filter((r)=>!trackedSet.has(r.path)).map((r)=>r.path);
     let changed = 0, skipped = 0, unreadable = 0;
+    const unreadableDiagnostics = [];
     const pending = [];
 
     for (const relPath of tracked) {
-      const text = await readLocalSource(gitRoot, relPath);
-      if (text === null) { unreadable++; continue; }
+      let text;
+      try {
+        text = await readLocalSource(gitRoot, relPath);
+      } catch (error) {
+        unreadable++;
+        unreadableDiagnostics.push({
+          file: relPath, analyzer_id: "source-reader", severity: "error",
+          code: "source_read_failed", message: error.message, status: "failed"
+        });
+        continue;
+      }
+      if (text === null) {
+        unreadable++;
+        unreadableDiagnostics.push({
+          file: relPath, analyzer_id: "source-reader", severity: "error",
+          code: "unreadable_source", message: "symlink, non-text, or oversized source",
+          status: "failed"
+        });
+        continue;
+      }
       const contentHash = sha256Text(text);
       const old = existingMap.get(relPath);
-      if (!force && old?.content_hash === contentHash && old?.parser_version === PARSER_VERSION) { skipped++; continue; }
-      pending.push({ relPath, text, contentHash, language: detectLanguage(relPath) });
+      const language = detectLanguage(relPath);
+      if (!force && old?.content_hash === contentHash
+        && old?.parser_version === parserVersionFor(language, analyzerRegistry)) {
+        skipped++;
+        continue;
+      }
+      pending.push({ relPath, text, contentHash, language });
     }
 
-    const goResults = await analyzeGoFiles(gitRoot, pending.filter((x)=>x.language === "go").map((x)=>x.relPath));
+    const analyzed = await analyzePendingFiles({
+      repoRoot: gitRoot, pending, trackedSet, registry: analyzerRegistry
+    });
+    analyzed.diagnostics.unshift(...unreadableDiagnostics);
+    const successful = pending.filter((item) => analyzed.results.has(item.relPath));
 
     transaction(db, () => {
       for (const filePath of removed) {
@@ -398,13 +423,11 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
         db.prepare("DELETE FROM files WHERE path=?").run(filePath);
       }
 
-      for (const item of pending) {
+      for (const item of successful) {
         const oldSymbols = db.prepare("SELECT symbol_id,implementation_hash,semantic_hash FROM symbols WHERE file_path=?").all(item.relPath);
         markFeaturesForFileChange(db, item.relPath);
         db.prepare("DELETE FROM files WHERE path=?").run(item.relPath);
-        let analysis = { symbols: [], dependencies: [] };
-        if (item.language === "go") analysis = goResults.get(item.relPath) ?? analysis;
-        else if (["typescript","javascript","vue"].includes(item.language)) analysis = analyzeScriptFile({ text: item.text, relPath: item.relPath, language: item.language, trackedSet });
+        const analysis = analyzed.results.get(item.relPath);
         insertAnalysis(db, item.relPath, item.language, item.contentHash, item.text, analysis, now);
         const newSymbols = new Map((analysis.symbols ?? []).map((s)=>[s.symbol_id,s]));
         markOldFeatureRefs(db, item.relPath, oldSymbols, newSymbols, now);
@@ -425,9 +448,12 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
     syncFeatureDefinitions(db, definitions, now);
     refreshFeatureStatus(db, now);
     db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)").run("last_indexed_at", now);
-    db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)").run("repository_root", gitRoot);
+    db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)")
+      .run("repository_root", gitRoot);
+    db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)")
+      .run("analysis_diagnostics", JSON.stringify(analyzed.diagnostics));
     const manifest = await exportIndex(db, outDir);
-    return { ok: true, repository: gitRoot, index_dir: outDir, database: dbPath, changed_files: changed, skipped_files: skipped, removed_files: removed.length, unreadable_files: unreadable, feature_definitions: definitions.length, manifest };
+    return { ok: true, repository: gitRoot, index_dir: outDir, database: dbPath, changed_files: changed, skipped_files: skipped, removed_files: removed.length, unreadable_files: unreadable, analysis_failed_files: analyzed.diagnostics.filter((entry) => entry.status !== "complete").length, diagnostics: analyzed.diagnostics, feature_definitions: definitions.length, manifest };
   } finally {
     db.close();
   }

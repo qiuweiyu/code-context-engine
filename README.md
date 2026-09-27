@@ -351,3 +351,5 @@ MIT
 ## Analyzer quality baseline
 
 Run `npm run benchmark` to inspect labeled graph edges, query relevance and indexing cost. The small seed corpus includes a known TypeScript barrel miss; see [benchmark guide](docs/BENCHMARKS.md).
+
+Internal analyzer boundary: [contract](docs/ANALYZER-CONTRACT.md).

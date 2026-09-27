@@ -48,6 +48,9 @@ export function projectQueryOutput(result, { compact = false } = {}) {
       compactFile(entry, MAYBE_READ_SYMBOL_LIMIT)
     ),
     tests: [...(result.tests ?? [])],
+    ...(result.analysis_diagnostics?.length
+      ? { analysis_failed_files: result.analysis_diagnostics.filter((entry) => entry.status !== "complete").length }
+      : {}),
     semantic_refinement_recommended: Boolean(result.semantic_refinement_recommended)
   };
 }

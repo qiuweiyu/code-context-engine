@@ -63,19 +63,19 @@ The next milestone should improve analyzer precision rather than continue adding
 
 ## v0.2 — Multi-language analyzer architecture and native language intelligence
 
-### WP8-A — Ground Truth seed baseline (in progress)
+### WP8-A — Ground Truth seed baseline (merged)
 
 - [x] start a checked-in fixture, positive/negative typed-edge labels and query relevance
 - [x] provide a reproducible runner for labeled Precision/Recall, Top-K/MRR, cold/warm index, query time and output bytes
 - [x] add Go interface ambiguity, TS barrel, Vue dual-script, comment false-positive and ambiguous-route cases
 - [ ] expand to JS aliases, dynamic imports and real repository ground truth before promoting quality gates
 
-### WP8-B — Internal Language Analyzer Contract (planned)
+### WP8-B — Internal Language Analyzer Contract (implementation in progress)
 
-- [ ] separate language detection, dispatch, native analysis and normalized fact output
-- [ ] include per-fact provenance, diagnostics, partial-result and analyzer version rules
-- [ ] wrap existing Go/TS/JS/Vue analyzers without changing graph/retrieval/MCP behavior
-- [ ] retain backward compatibility; defer the public plugin ABI
+- [x] dispatch existing native analyzers through normalized fact output
+- [x] internal fact provenance, diagnostics, safe partial-result handling and per-analyzer version invalidation
+- [x] wrap existing Go/TS/JS/Vue analyzers; successful query output and ranking stay compatible
+- [x] retain schema 8 and existing graph/node IDs; defer public plugin ABI
 
 ### WP9 — TS/JS Compiler API and module resolution
 
