@@ -1,12 +1,10 @@
 # CCE Development Plan
 
-Status: **planned / not started**
+Status: **WP8-A seed implementation in progress; WP8-B and later planned**.
 
-Planning date: 2026-09-27
+Planning baseline: `4f69f4852bc622ed7ae281a268498fd7f2daaf86` (v0.1.7). Documentation baseline: `8ef900b7f51182cbe5af63cfb3fb13686e6a9299`.
 
-Code baseline before this documentation convergence: `4f69f4852bc622ed7ae281a268498fd7f2daaf86` (`v0.1.7`).
-
-This document defines the next engineering sequence after WP7. It does not authorize background/local-machine work while the development machines are offline.
+On 2026-09-27 Ubuntu `/opt/CCE/code-context-engine` main, origin/main and GitHub main were verified equal to `8ef900b7...` with divergence 0/0; 38/38 regression tests passed. A pre-existing untracked `package-lock.json` was preserved. Windows sync was not verified in this development turn. WP8-A starts from this baseline on one task branch.
 
 ## 1. Current accepted baseline
 
@@ -23,207 +21,37 @@ Accepted facts before this documentation-only update:
 - three real SGC Compact benchmarks: approximately 93% serialized-output reduction while preserving selected paths, coverage status and tests
 - typed graph, bounded traversal and cross-surface retrieval are already implemented
 
-The documentation convergence itself will create a newer `main` commit. When development resumes, `origin/main` is authoritative; do not assume the pre-documentation SHA is still HEAD.
+The documentation convergence created `8ef900b7...`; Ubuntu main was verified at that commit before the WP8-A branch was created.
 
-## 2. Development pause boundary
+## 2. Current development state
 
-At the time this plan is written, the Ubuntu and Windows development machines are not running.
+Ubuntu main synchronization and the existing test gate passed on 2026-09-27. Work is now on `work/cce-wp8a-quality-baseline`. The pre-existing untracked lockfile has not been added, overwritten or removed. GitHub main remains the published baseline until a WP8-A PR is accepted.
 
-Therefore this phase is intentionally limited to:
+## 3. Environment and subsequent sync gates
 
-- GitHub documentation updates,
-- roadmap/architecture synchronization,
-- future work-package definition.
+Before future packages: compare GitHub main, local main and origin/main, inspect `git status --short --branch`, run `git fetch --prune origin`, then compare `git rev-list --left-right --count main...origin/main`. Only fast-forward a clean main when the remote is confirmed. Preserve any unrelated local files.
 
-Do **not** treat any local Ubuntu/Windows repository as synchronized until it has been explicitly checked after the machine starts.
+Ubuntu: `/opt/CCE/code-context-engine`, Node 22.22.1, Go 1.26.0. CI uses Node 22 / Go 1.25.x; record compatibility differences. Windows: historical clone `D:/Tools/code-context-engine`, **not checked this turn**. After a WP merge, synchronize each clone safely, run `npm test` and `npm run benchmark`, record the commit and results. No reset/clean of unknown work.
 
-No WP8 code implementation begins before the resume gate below passes.
+## 4. Revised engineering sequence (2026-09-27)
 
-## 3. Resume gate when machines are available
+This sequence supersedes the earlier ordering that placed the first accuracy corpus at WP14. WP8-A has begun on branch `work/cce-wp8a-quality-baseline`; later packages remain planned. An analyzer change must be measured against a frozen corpus, not just the regression suite.
 
-### Ubuntu development clone
+| Package | Goal and scope | Non-goals / dependency | Acceptance and risk |
+| --- | --- | --- | --- |
+| WP8-A | Check in labeled positive and negative graph facts, query relevance, a reproducible runner and timing/output measurements. The seed includes Go ambiguity, TS barrel, Vue dual-script, route ambiguity and comment false positives; later expand JS aliases, dynamic import and real-repo labels. | No parser/retriever changes; baseline v0.1.7. | Reproducible edge precision/recall over *labeled facts*, Top-K/MRR, cold/warm index, query time and bytes; risk: a tiny corpus overstates quality. |
+| WP8-B | Internal language analyzer contract with dispatch, fact provenance, diagnostics, partial results and analyzer-specific invalidation. Wrap existing analyzers. | No public stable plugin ABI or new language; WP8-A baseline. | All regression tests and frozen query baselines remain compatible; failure does not silently become an empty successful analysis. Risk: symbol IDs and schema migration. |
+| WP9 | TS/JS TypeScript Compiler API **and module resolution together**: Program/TypeChecker, tsconfig/jsconfig aliases, re-exports and barrels. | Do not retune Retriever; WP8-B. | Improve labeled import/call and retrieval results without an unreviewed false-positive increase; compare index cost. Risk: config gaps and memory. |
+| WP10 | Vue compiler-sfc, both script blocks, script setup macros and page/component/composable evidence. | Not every Vue ecosystem convention; WP9. | Ground-truth SFC cases and real project flow comparison. Risk: source maps and template semantics. |
+| WP11 | Go go/packages and go/types for cross-package calls, method sets, generics and interface evidence. | No SSA yet; WP8-B. | Compare correct/incorrect/unresolved edges and cost against the Go baseline. Risk: build tags and unavailable dependencies. |
+| WP12 | Conditional Go SSA/callgraph pilot when WP11 measurement shows a worthwhile gap. | No claim of unique runtime dispatch for a possible target; WP11. | Explicit precision/cost gate for DI and multiple implementations. Risk: graph explosion. |
+| WP13 | Larger multi-project corpus and quality/performance CI gates. | The first baseline is already WP8-A; WP9-12. | Repeatable results across supported OSes, documented regression thresholds. |
+| WP14 | CLI, job, consumer and queue entry points and non-HTTP feature flows. | Preserve implemented HTTP flows; reliable facts first. | Ground-truth trace from entry to data and tests. |
+| WP15 | SCIP, stable public schema and third-party plugin API design. | Do not freeze public ABI before multiple analyzers. | Versioned consumer compatibility and migration samples. |
+| WP16 | IDE and graph visualization prototypes. | Depends on WP15. | Navigable code and evidence. |
+| WP17 | Optional semantic providers only. | No required LLM, embedding or source upload. | Core offline mode and measurable optional benefit. |
 
-Expected historical location:
-
-```text
-/opt/CCE/code-context-engine
-```
-
-First inspect; do not destroy local work:
-
-```bash
-cd /opt/CCE/code-context-engine
-git status --short --branch
-git remote -v
-git fetch --prune origin
-git rev-list --left-right --count main...origin/main
-```
-
-If the worktree is clean and `main` can fast-forward safely:
-
-```bash
-git checkout main
-git pull --ff-only origin main
-git status --short --branch
-git rev-parse HEAD
-git rev-parse origin/main
-npm install
-npm test
-```
-
-Required gate:
-
-- local `main` = `origin/main`
-- divergence = 0/0
-- worktree clean
-- existing full test suite PASS
-
-If local changes exist, preserve and inspect them before any pull/reset. Do not use destructive reset as the default synchronization method.
-
-### Windows clone
-
-Expected historical location:
-
-```text
-D:/Tools/code-context-engine
-```
-
-PowerShell inspection:
-
-```powershell
-Set-Location D:/Tools/code-context-engine
-git status --short --branch
-git remote -v
-git fetch --prune origin
-git rev-list --left-right --count main...origin/main
-```
-
-If clean and fast-forward safe:
-
-```powershell
-git checkout main
-git pull --ff-only origin main
-git status --short --branch
-git rev-parse HEAD
-git rev-parse origin/main
-npm install
-npm test
-```
-
-The same preservation rule applies: do not discard unknown local modifications.
-
-## 4. Engineering sequence
-
-### WP8 — Language Analyzer Architecture & Plugin Contract
-
-Goal: make language support extensible before adding more language implementations.
-
-Scope:
-
-1. Define a stable analyzer interface.
-2. Separate:
-   - language detection,
-   - analyzer selection/dispatch,
-   - native parser/compiler execution,
-   - normalized CCE fact production.
-3. Define normalized analyzer output:
-   - files,
-   - symbols,
-   - dependencies/imports/calls,
-   - routes/client requests where supported,
-   - data objects where supported,
-   - tests,
-   - diagnostics.
-4. Define analyzer capability metadata, for example:
-   - symbols,
-   - imports,
-   - calls,
-   - types,
-   - routes,
-   - database evidence,
-   - tests,
-   - exact resolution.
-5. Define analyzer/parser version rules and incremental-index invalidation behavior.
-6. Define partial-result/error behavior.
-7. Keep current Go / TypeScript / JavaScript / Vue behavior backward compatible.
-8. Add analyzer contract tests.
-9. Document how future Java, Python, C/C++, C#, Rust and other adapters integrate without changing graph/retrieval core behavior.
-
-Non-goals:
-
-- no Java analyzer yet,
-- no Python analyzer yet,
-- no new LLM/embedding dependency,
-- no SGC-specific hardcoding,
-- no retrieval heuristic expansion unless required to preserve existing behavior.
-
-Acceptance:
-
-- current 38-test baseline remains PASS,
-- new contract tests PASS,
-- current real-project query behavior remains compatible,
-- graph/retrieval/MCP modules consume normalized facts without language-specific branching added for future languages,
-- documentation updated with the implemented contract.
-
-### WP9 — TypeScript Compiler API
-
-Move TS/JS analysis toward compiler-backed symbol/import/call evidence.
-
-Acceptance must include compatibility tests against current fixtures and real-project benchmarks.
-
-### WP10 — Vue compiler-sfc
-
-Use `@vue/compiler-sfc` for SFC parsing and improve script-setup/macros/component relationships.
-
-### WP11 — TypeScript/JavaScript module resolution
-
-Add tsconfig/jsconfig aliases, re-exports/barrels and stronger module resolution.
-
-### WP12 — Go go/packages + go/types
-
-Add compiler/type-system evidence while retaining deterministic AST facts as fallback/source evidence.
-
-### WP13 — Go SSA / callgraph
-
-Add higher-confidence callgraph evidence for cases where build/package configuration permits it.
-
-### WP14 — Benchmark Corpus & Quality Metrics
-
-Create checked-in benchmark repositories/fixtures with ground truth.
-
-Measure:
-
-- call/route/test precision and recall,
-- graph edge correctness,
-- retrieval Top-K hit rate / MRR,
-- index time,
-- incremental index time,
-- query time,
-- Full/Compact serialized size.
-
-### WP15 — Non-HTTP feature flows
-
-Add entry-point/event/job/queue/CLI flow modeling after language-resolution quality is stable.
-
-### WP16 — Interoperability
-
-SCIP export, stable public schema and public plugin surface based on the WP8 contract.
-
-### WP17 — IDE / graph visualization
-
-Build editor/visualization prototypes only after schema/plugin boundaries are stable.
-
-### WP18 — Optional semantic providers
-
-Optional semantic/embedding/LLM ranking may be explored as plugins.
-
-Core rules:
-
-- never required for indexing/querying,
-- never replace deterministic evidence,
-- never require source upload,
-- local deterministic mode remains the default.
-
+Benchmark usage and labeling limits: [BENCHMARKS.md](BENCHMARKS.md). The current small corpus is a **seed baseline**, not a completed multi-language accuracy claim. The originally proposed WP11 module-resolution work is merged into WP9; the originally proposed WP14 benchmark starts in WP8-A. Keep one bounded branch per package and record measured evidence in the PR.
 ## 5. Language expansion policy
 
 CCE is a multi-language engine, not a Go/TypeScript/Vue-only product.
@@ -273,11 +101,4 @@ Avoid accumulating unnecessary long-lived branches.
 
 ## 7. Next action
 
-When a development machine is available:
-
-1. synchronize both known clones safely,
-2. confirm the documentation-converged `main`,
-3. run the existing baseline tests,
-4. begin **WP8 only**.
-
-Do not skip directly to Java/Python implementation before WP8 is accepted.
+Complete WP8-A corpus expansion and baseline review, then implement WP8-B on a new branch from accepted main.

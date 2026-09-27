@@ -63,55 +63,58 @@ The next milestone should improve analyzer precision rather than continue adding
 
 ## v0.2 — Multi-language analyzer architecture and native language intelligence
 
-### WP8 — Language Analyzer Architecture & Plugin Contract
+### WP8-A — Ground Truth seed baseline (in progress)
 
-- [ ] define a stable analyzer interface independent of any one language
-- [ ] define analyzer capability metadata such as symbols/imports/calls/types/routes/tests/exact-resolution
-- [ ] separate language detection, analyzer dispatch and fact normalization
-- [ ] define diagnostics/error boundaries for partial analyzer results
-- [ ] define parser/analyzer versioning rules
-- [ ] keep current Go / TypeScript / JavaScript / Vue behavior backward compatible
-- [ ] document how future Java, Python, C/C++, C#, Rust and other analyzers plug into CCE
-- [ ] add contract tests before adding new languages
+- [x] start a checked-in fixture, positive/negative typed-edge labels and query relevance
+- [x] provide a reproducible runner for labeled Precision/Recall, Top-K/MRR, cold/warm index, query time and output bytes
+- [x] add Go interface ambiguity, TS barrel, Vue dual-script, comment false-positive and ambiguous-route cases
+- [ ] expand to JS aliases, dynamic imports and real repository ground truth before promoting quality gates
 
-The core rule is: language adapters produce normalized CCE facts; graph, traversal, retrieval, Compact output and MCP remain language-independent.
+### WP8-B — Internal Language Analyzer Contract (planned)
 
-### WP9 — TypeScript Compiler API
+- [ ] separate language detection, dispatch, native analysis and normalized fact output
+- [ ] include per-fact provenance, diagnostics, partial-result and analyzer version rules
+- [ ] wrap existing Go/TS/JS/Vue analyzers without changing graph/retrieval/MCP behavior
+- [ ] retain backward compatibility; defer the public plugin ABI
 
-- [ ] replace/augment regex-only declaration and call analysis with TypeScript Compiler API
-- [ ] use `Program` / `TypeChecker` where safe
-- [ ] resolve imports, re-exports and symbols with compiler evidence
-- [ ] preserve uncertainty when runtime behavior cannot be proven
-- [ ] keep JavaScript supported through the same analyzer where possible
+### WP9 — TS/JS Compiler API and module resolution
+
+- [ ] use Program/TypeChecker, tsconfig/jsconfig alias and package resolution
+- [ ] handle re-exports/barrels and JavaScript where possible
+- [ ] compare labeled edge quality and index cost with WP8-A
 
 ### WP10 — Vue compiler-sfc
 
-- [ ] use `@vue/compiler-sfc`
-- [ ] reliably parse `<script>` and `<script setup>`
-- [ ] support common Vue macros without hand-written source stripping
-- [ ] improve component/composable/store/API relationships
+- [ ] parse both script blocks, script setup macros and template/component links
+- [ ] measure page/API and composable/store results against frozen cases
 
-### WP11 — TypeScript/JavaScript module resolution
+### WP11 — Go packages and types
 
-- [ ] tsconfig/jsconfig path aliases
-- [ ] package/module resolution
-- [ ] barrel/re-export resolution
-- [ ] generated-code exclusions appropriate to JS/TS ecosystems
+- [ ] use go/packages and go/types for cross-package and interface facts
+- [ ] preserve AST-only results with explicit provenance when type checking fails
 
-### WP12 — Go native type intelligence
+### WP12 — Conditional Go SSA/callgraph pilot
 
-- [ ] Go `go/packages`
-- [ ] Go `go/types`
-- [ ] package/type-aware interface implementation resolution
-- [ ] improve generic and embedded-interface handling
-- [ ] preserve existing AST facts as deterministic fallback evidence
+- [ ] attempt only where WP11 benchmarks justify cost
+- [ ] separate possible dynamic targets from uniquely established targets
 
-### WP13 — Go SSA / callgraph
+### WP13 — Expanded corpus and quality gates
 
-- [ ] SSA construction where repository configuration permits
-- [ ] compiler-backed callgraph evidence
-- [ ] distinguish exact/type-resolved edges from heuristic/static edges
-- [ ] benchmark interface and dependency-injection-heavy code
+- [ ] multi-project labeled corpus, edge/query metrics and performance budgets
+- [ ] compare parser generations on the same frozen source/configuration
+
+### WP14 — Non-HTTP flows
+
+- [ ] CLI, jobs, consumers and queues, preserving implemented HTTP flows
+
+### WP15 — SCIP, stable schema and public plugin API
+
+- [ ] freeze the external interface after multiple analyzer implementations
+
+### WP16 — IDE / graph visualization; WP17 — Optional semantic providers
+
+- [ ] add editor/visualization integrations after schema stability
+- [ ] keep all semantic providers optional and the deterministic core offline
 
 ### Future language adapters after the contract is stable
 
@@ -153,12 +156,12 @@ Some originally planned v0.3 work was delivered early in WP4–WP6. Remaining wo
 
 ---
 
-## v0.5 — Quality, benchmarks and scale
+## Quality and scale (baseline begins at WP8-A)
 
-- [ ] checked-in benchmark corpus with ground truth
-- [ ] precision/recall evaluation for calls/routes/tests
-- [ ] retrieval Top-K / MRR evaluation
-- [ ] graph edge correctness evaluation
+- [x] small checked-in ground-truth seed corpus; expansion remains WP8-A / WP13
+- [x] labeled typed-edge precision/recall seed (broader calls/routes/tests coverage pending)
+- [x] Top-K / MRR seed (multi-project expansion pending)
+- [x] small positive/negative graph edge baseline (expansion pending)
 - [ ] large-monorepo incremental benchmark
 - [ ] index migration/version compatibility
 - [x] Ubuntu CI

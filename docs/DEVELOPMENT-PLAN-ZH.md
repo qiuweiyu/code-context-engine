@@ -1,12 +1,10 @@
 # CCE 后续开发计划
 
-状态：**已规划 / 尚未开始开发**
+状态：**WP8-A 起步语料开发中；WP8-B 及之后尚在规划阶段**。
 
-规划日期：2026-09-27
+规划前代码基线：`4f69f4852bc622ed7ae281a268498fd7f2daaf86`（v0.1.7）；文档基线：`8ef900b7f51182cbe5af63cfb3fb13686e6a9299`。
 
-本次文档收口前的代码基线：`4f69f4852bc622ed7ae281a268498fd7f2daaf86`（`v0.1.7`）。
-
-本文档冻结 WP7 之后的后续工程顺序。当前 Ubuntu / Windows 开发机器未启动，因此本阶段只允许进行 GitHub 远端文档治理，不视为已经开始 WP8 代码开发。
+2026-09-27 实测 Ubuntu `/opt/CCE/code-context-engine` 的 main、origin/main 与 GitHub main 均为 `8ef900b7...`，分叉 0/0，原有 38/38 测试通过。保留原有未跟踪 `package-lock.json`。本轮没有核验 Windows 同步。WP8-A 从此基线另开一个任务分支。
 
 ## 1. 当前已验收基线
 
@@ -23,219 +21,37 @@ WP7 已完成。
 - 真实 SGC 三组 Compact Benchmark：序列化输出约减少 93%，且待读路径、coverage 状态和 tests 保持
 - typed graph、有界 traversal、跨 surface retrieval 已经属于当前实现，不再列为未来能力
 
-本次文档收口合并后，`main` 会产生新的提交 SHA。后续恢复开发时以 `origin/main` 为唯一远端基线，不要把文档更新前 SHA 当成新的 HEAD。
+文档收口产生 `8ef900b7...`；创建 WP8-A 分支前，Ubuntu main 已实测同步至该提交。
 
-## 2. 当前暂停边界
+## 2. 当前开发状态
 
-当前 Ubuntu 和 Windows 开发机器均未启动。
+Ubuntu main 的同步及原有测试门禁于 2026-09-27 通过。目前在 `work/cce-wp8a-quality-baseline` 上推进。原有未跟踪 lockfile 没有加入、覆盖或删除。在 WP8-A PR 验收前，GitHub main 仍是公开基线。
 
-因此本阶段只执行：
+## 3. 环境与后续同步门禁
 
-- GitHub 项目文档更新；
-- Roadmap / Architecture 与真实代码能力同步；
-- 冻结后续工作包顺序。
+每个新包开始前：核对 GitHub main、本机 main 和 origin/main，先看 `git status --short --branch`，执行 `git fetch --prune origin`，再看 `git rev-list --left-right --count main...origin/main`。确认远端可靠且 main 可快进后才同步；保留无关本地文件。
 
-在机器启动并明确执行同步之前，不假定任何本地仓库已经包含本次文档更新。
+Ubuntu：`/opt/CCE/code-context-engine`，Node 22.22.1、Go 1.26.0。CI 用 Node 22 / Go 1.25.x，若有差异需记录。Windows 历史仓库：`D:/Tools/code-context-engine`，**本轮未检查**。每次 WP 合并后分别安全同步、运行 `npm test` 和 `npm run benchmark`，记录 SHA/结果。不要 reset/clean 未知修改。
 
-**WP8 代码开发必须等下面的恢复门禁通过后再开始。**
+## 4. 调整后的工程顺序（2026-09-27）
 
-## 3. 机器启动后的恢复门禁
+本节替代旧的“到 WP14 才建立首个准确率语料”的顺序。WP8-A 已在 `work/cce-wp8a-quality-baseline` 分支启动，其余工作包尚未开始。分析器升级要和固定标注语料对比，不能只看回归测试全绿。
 
-### Ubuntu 开发仓库
+| 工作包 | 目标与范围 | 非目标与依赖 | 验收与风险 |
+| --- | --- | --- | --- |
+| WP8-A | 建立正反图边标注、相关文件标注、可重复的评估脚本，以及索引/查询耗时和输出大小指标；起步语料已加入 Go 多实现、TS barrel、Vue 双脚本、Route 歧义及注释误检；后续继续扩充 JS alias、动态导入和真实仓库标注。 | 不改 parser/Retriever；依赖 v0.1.7。 | 仅在**已标注事实集合**计算 Precision/Recall，并记录 Top-K/MRR、冷/热索引、查询时间与字节数；风险是样本太少导致误判。 |
+| WP8-B | 内部语言分析契约：调度、Fact 来源、诊断、部分结果、各分析器版本失效规则；先封装现有分析器。 | 暂不承诺公共插件 ABI，不加新语言；依赖 WP8-A。 | 原 38 项回归及固定查询兼容，失败不得悄悄当作空结果；风险是符号 ID/Schema 迁移。 |
+| WP9 | **合并** TS/JS Compiler API 与模块解析：Program/TypeChecker、tsconfig/jsconfig alias、barrel/re-export。 | 不顺手调整 Retriever；依赖 WP8-B。 | 标注 import/call 与检索结果改善，不能引入未经评审的误连；记录索引成本。风险是配置缺失和内存。 |
+| WP10 | Vue compiler-sfc、双 script、script setup 宏以及页面/组件/composable 关系。 | 不追求一次覆盖 Vue 全生态；依赖 WP9。 | SFC 标注与真实项目链路对照；风险是源码位置映射和 template 语义。 |
+| WP11 | Go go/packages、go/types，跨包调用、方法集、泛型与接口证据。 | 暂不做 SSA；依赖 WP8-B。 | 对比正确/错误/unresolved 边及运行成本；风险是构建标签与依赖缺失。 |
+| WP12 | 若 WP11 的量测证明值得，做 Go SSA/callgraph 试点。 | 可能调用不冒充唯一运行目标；依赖 WP11。 | DI/多实现的精度和成本门槛；风险是图膨胀。 |
+| WP13 | 扩大到多项目语料，并加入质量、性能 CI 门禁。 | 首批基线已在 WP8-A；依赖 WP9–12。 | 多系统可复现，回归阈值有记录。 |
+| WP14 | CLI/job/consumer/queue 等非 HTTP 入口与流程。 | 保留已实现 HTTP 流程，依赖可靠 Facts。 | 入口至数据/测试的标注链路。 |
+| WP15 | SCIP、稳定公共 Schema 和第三方插件 API。 | 不过早冻结 ABI；依赖多个真实分析器。 | 有版本化消费者及迁移案例。 |
+| WP16 | IDE/图可视化原型。 | 依赖 WP15。 | 可定位源代码及依据。 |
+| WP17 | 可选语义 Provider。 | 核心不依赖 LLM/Embedding/源码上传。 | 离线核心可独立运行，附加收益可量化。 |
 
-历史约定位置：
-
-```text
-/opt/CCE/code-context-engine
-```
-
-先检查，不破坏任何本地修改：
-
-```bash
-cd /opt/CCE/code-context-engine
-git status --short --branch
-git remote -v
-git fetch --prune origin
-git rev-list --left-right --count main...origin/main
-```
-
-如果 worktree 干净，并且 main 可以安全 fast-forward：
-
-```bash
-git checkout main
-git pull --ff-only origin main
-git status --short --branch
-git rev-parse HEAD
-git rev-parse origin/main
-npm install
-npm test
-```
-
-进入开发前必须满足：
-
-- 本地 `main = origin/main`
-- divergence = `0/0`
-- worktree clean
-- 当前完整测试 PASS
-
-如果发现本地未提交修改，先保留并分析，不默认使用 destructive reset，不允许为了同步直接丢弃未知修改。
-
-### Windows 仓库
-
-历史约定位置：
-
-```text
-D:/Tools/code-context-engine
-```
-
-PowerShell 检查：
-
-```powershell
-Set-Location D:/Tools/code-context-engine
-git status --short --branch
-git remote -v
-git fetch --prune origin
-git rev-list --left-right --count main...origin/main
-```
-
-如果干净且可以 fast-forward：
-
-```powershell
-git checkout main
-git pull --ff-only origin main
-git status --short --branch
-git rev-parse HEAD
-git rev-parse origin/main
-npm install
-npm test
-```
-
-同样禁止在未确认本地修改来源前直接覆盖或删除。
-
-## 4. 后续正式工作包
-
-### WP8 — Language Analyzer Architecture & Plugin Contract
-
-目标：**先把多语言扩展接口稳定下来，再增加 Java / Python 等新语言。**
-
-范围：
-
-1. 定义稳定的 Language Analyzer 接口。
-2. 把以下职责分开：
-   - language detection；
-   - analyzer 选择/调度；
-   - 原生 parser/compiler 执行；
-   - 统一 CCE Facts 输出。
-3. 定义统一输出：
-   - files；
-   - symbols；
-   - dependencies/imports/calls；
-   - 支持时输出 routes/client requests；
-   - 支持时输出 data objects；
-   - tests；
-   - diagnostics。
-4. 定义 Analyzer Capability，例如：
-   - symbols；
-   - imports；
-   - calls；
-   - types；
-   - routes；
-   - database evidence；
-   - tests；
-   - exact resolution。
-5. 定义 analyzer/parser version 与增量索引失效规则。
-6. 定义 partial result / error 边界。
-7. 保持现有 Go / TypeScript / JavaScript / Vue 行为向后兼容。
-8. 增加 Analyzer Contract 测试。
-9. 明确未来 Java、Python、C/C++、C#、Rust 等语言只通过 Adapter 接入，不让语言判断散落到 graph/retrieval 核心。
-
-本包明确不做：
-
-- 不直接实现 Java Analyzer；
-- 不直接实现 Python Analyzer；
-- 不增加 LLM / Embedding 必选依赖；
-- 不增加 SGC 项目硬编码；
-- 除非为保持兼容性所必需，不继续扩张 retrieval heuristic。
-
-验收要求：
-
-- 原有 38 个测试继续 PASS；
-- 新增 Contract 测试 PASS；
-- 当前真实项目 query 行为保持兼容；
-- Graph / Retrieval / MCP 消费统一 Facts，而不是为未来语言不断增加核心层分支；
-- 文档同步到实际实现。
-
-### WP9 — TypeScript Compiler API
-
-将 TS/JS 从当前保守文本分析推进到 compiler-backed 的 symbol/import/call 解析。
-
-必须同时做现有 fixture 回归和真实项目 Benchmark 对比。
-
-### WP10 — Vue compiler-sfc
-
-接入 `@vue/compiler-sfc`，可靠处理 `<script>`、`<script setup>`、常见宏以及 component/composable/store/API 关系。
-
-### WP11 — TypeScript / JavaScript 模块解析
-
-增加：
-
-- tsconfig/jsconfig alias；
-- re-export / barrel；
-- package/module resolution；
-- 更稳健的生成代码排除。
-
-### WP12 — Go go/packages + go/types
-
-加入 Go 原生 package/type 证据，提高 interface、generic、跨包方法解析精度；现有 AST Facts 保留为确定性基础/回退证据。
-
-### WP13 — Go SSA / callgraph
-
-在项目 build/package 条件允许时加入 SSA 与 compiler-backed callgraph，提高复杂调用链精度。
-
-### WP14 — Benchmark Corpus & Quality Metrics
-
-在 CCE 仓库建立可复现、带 Ground Truth 的 Benchmark。
-
-指标至少包括：
-
-- call/route/test Precision / Recall；
-- Graph Edge 正确率；
-- Retrieval Top-K Hit Rate / MRR；
-- 全量索引耗时；
-- 增量索引耗时；
-- Query 耗时；
-- Full / Compact 输出大小。
-
-### WP15 — 非 HTTP Feature Flow
-
-在语言解析精度稳定后，再增加：
-
-- entry-point registry；
-- CLI command flow；
-- scheduled job；
-- event consumer；
-- queue publish/consume；
-- 其他事件型链路。
-
-### WP16 — Interoperability
-
-实现 SCIP、稳定公开 JSON Schema，以及建立在 WP8 Contract 上的公开 Plugin API。
-
-### WP17 — IDE / Graph Visualization
-
-等 Schema / Plugin 边界稳定后再进行编辑器和图谱可视化原型。
-
-### WP18 — Optional Semantic Providers
-
-最后再考虑可选的语义/Embedding/LLM Provider。
-
-底线：
-
-- 不成为核心索引/query 的必需依赖；
-- 不替代静态证据；
-- 不要求源码上传；
-- Local + deterministic 始终是默认模式。
-
+评估的用法与标注边界见 [BENCHMARKS.md](BENCHMARKS.md)。当前六组小型语料只是**起步基线**，不能宣称多语言准确率已经达到产品标准。原 WP11 模块解析并入 WP9；原 WP14 Benchmark 提前到 WP8-A。每个工作包仍只用一个有边界的任务分支，PR 记录量测证据。
 ## 5. 多语言支持原则
 
 CCE 的目标不是 Go / TypeScript / Vue 专用工具，而是多语言代码上下文引擎。
@@ -285,11 +101,4 @@ WP8 Contract 稳定后，建议语言扩展优先级：
 
 ## 7. 下一步
 
-机器启动后只做以下顺序：
-
-1. 安全同步 Ubuntu / Windows 已知仓库；
-2. 确认已经取得本次文档收口后的最新 `main`；
-3. 执行当前基线测试；
-4. **只进入 WP8**。
-
-WP8 未验收前，不直接跳到 Java / Python Analyzer 开发。
+先完成 WP8-A 语料扩充与基线评审；验收合并后再从新 main 分支启动 WP8-B。

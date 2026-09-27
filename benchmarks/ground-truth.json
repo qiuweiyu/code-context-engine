@@ -1,0 +1,198 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "vue-ts-go-http",
+      "fixture": "mixed",
+      "query": "listTasks tasks",
+      "maxFiles": 5,
+      "relevantFiles": [
+        "src/pages/Tasks.vue",
+        "src/api/tasks.ts",
+        "backend/tasks.go"
+      ],
+      "edges": [
+        {
+          "type": "page_api",
+          "from": "file:src/pages/Tasks.vue",
+          "to": "symbol:typescript:src/api/tasks.ts::listTasks",
+          "present": true
+        },
+        {
+          "type": "api_request",
+          "from": "symbol:typescript:src/api/tasks.ts::listTasks",
+          "to": "route:server:GET:/api/tasks",
+          "present": true
+        },
+        {
+          "type": "route_handler",
+          "from": "route:server:GET:/api/tasks",
+          "to": "symbol:go:backend/tasks.go::ListTasks",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:go:backend/tasks.go::ListTasks",
+          "to": "symbol:go:backend/tasks.go::ReadTasks",
+          "present": true
+        },
+        {
+          "type": "db_read",
+          "from": "symbol:go:backend/tasks.go::ReadTasks",
+          "to": "db:table:tasks",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:go:backend/tasks.go::ReadTasks",
+          "to": "symbol:go:backend/tasks.go::ListTasks",
+          "present": false
+        },
+        {
+          "type": "api_request",
+          "from": "symbol:typescript:src/api/tasks.ts::listTasks",
+          "to": "route:server:POST:/api/tasks",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "ts-barrel-vue-page",
+      "fixture": "barrel",
+      "query": "fetchUsers users",
+      "maxFiles": 5,
+      "relevantFiles": [
+        "src/pages/Users.vue",
+        "src/api/users.ts",
+        "src/api/index.ts"
+      ],
+      "edges": [
+        {
+          "type": "page_api",
+          "from": "file:src/pages/Users.vue",
+          "to": "symbol:typescript:src/api/users.ts::fetchUsers",
+          "present": true
+        },
+        {
+          "type": "page_api",
+          "from": "file:src/pages/Users.vue",
+          "to": "symbol:typescript:src/api/index.ts::fetchUsers",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "vue-two-scripts-macro",
+      "fixture": "vue-dual",
+      "query": "fetchUsers users",
+      "maxFiles": 5,
+      "relevantFiles": [
+        "src/pages/Users.vue",
+        "src/api/users.ts"
+      ],
+      "edges": [
+        {
+          "type": "page_api",
+          "from": "file:src/pages/Users.vue",
+          "to": "symbol:typescript:src/api/users.ts::fetchUsers",
+          "present": true
+        },
+        {
+          "type": "api_request",
+          "from": "symbol:typescript:src/api/users.ts::fetchUsers",
+          "to": "route:server:POST:/api/users",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "go-interface-ambiguity",
+      "fixture": "go-ambiguous",
+      "query": "Run repo List",
+      "maxFiles": 5,
+      "relevantFiles": [
+        "backend/store.go"
+      ],
+      "edges": [
+        {
+          "type": "call",
+          "from": "symbol:go:backend/store.go::CallReadCount",
+          "to": "symbol:go:backend/store.go::ReadCount",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:go:backend/store.go::*Service.Run",
+          "to": "symbol:go:backend/store.go::*FirstRepo.List",
+          "present": false
+        },
+        {
+          "type": "call",
+          "from": "symbol:go:backend/store.go::*Service.Run",
+          "to": "symbol:go:backend/store.go::*SecondRepo.List",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "commented-request-false-positive",
+      "fixture": "comment-route",
+      "query": "listTasks tasks",
+      "maxFiles": 5,
+      "relevantFiles": [
+        "src/api/tasks.ts",
+        "backend/routes.go"
+      ],
+      "edges": [
+        {
+          "type": "api_request",
+          "from": "symbol:typescript:src/api/tasks.ts::listTasks",
+          "to": "route:server:GET:/api/tasks",
+          "present": true
+        },
+        {
+          "type": "api_request",
+          "from": "symbol:typescript:src/api/tasks.ts::ghost",
+          "to": "route:server:GET:/api/tasks",
+          "present": false
+        },
+        {
+          "type": "db_read",
+          "from": "symbol:go:backend/routes.go::ListTasks",
+          "to": "db:table:phantom_tasks",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "route-method-ambiguity",
+      "fixture": "route-ambiguity",
+      "query": "loadItems items",
+      "maxFiles": 5,
+      "relevantFiles": [
+        "src/api/items.ts",
+        "backend/routes.go"
+      ],
+      "edges": [
+        {
+          "type": "api_request",
+          "from": "symbol:typescript:src/api/items.ts::loadItems",
+          "to": "ref:api_request:ANY:/api/items",
+          "present": true
+        },
+        {
+          "type": "api_request",
+          "from": "symbol:typescript:src/api/items.ts::loadItems",
+          "to": "route:server:GET:/api/items",
+          "present": false
+        },
+        {
+          "type": "api_request",
+          "from": "symbol:typescript:src/api/items.ts::loadItems",
+          "to": "route:server:POST:/api/items",
+          "present": false
+        }
+      ]
+    }
+  ]
+}
