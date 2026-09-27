@@ -1,7 +1,7 @@
 {
-  "corpus_version": 5,
-  "case_count": 14,
-  "min_tp": 26,
+  "corpus_version": 6,
+  "case_count": 16,
+  "min_tp": 34,
   "max_fp": 1,
   "max_fn": 0,
   "max_warm_changed_per_case": 0,

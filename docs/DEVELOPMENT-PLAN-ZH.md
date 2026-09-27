@@ -35,7 +35,7 @@ Ubuntu：`/opt/CCE/code-context-engine`，Node 22.22.1、Go 1.26.0。CI 用 Node
 
 ## 4. 调整后的工程顺序（2026-09-27）
 
-本节替代旧的“到 WP14 才建立首个准确率语料”的顺序。WP8-A 到 WP11 已合并。条件式 WP12 SSA/callgraph 门槛暂缓，因为 WP11 冻结语料目前没有需要 SSA 才能解决的已标注漏检。WP13 当前在 `work/cce-wp13-quality-ci` 开发，其余后续工作包尚未开始。分析器升级要和固定标注语料对比，不能只看回归测试全绿。
+本节替代旧的“到 WP14 才建立首个准确率语料”的顺序。WP8-A 到 WP13 已合并。条件式 WP12 SSA/callgraph 门槛继续暂缓，因为当前冻结语料没有需要 SSA 才能解决的已标注漏检。WP14 当前在 `work/cce-wp14-entry-flows` 开发，其余后续工作包尚未开始。分析器升级要和固定标注语料对比，不能只看回归测试全绿。
 
 | 工作包 | 目标与范围 | 非目标与依赖 | 验收与风险 |
 | --- | --- | --- | --- |
@@ -51,7 +51,7 @@ Ubuntu：`/opt/CCE/code-context-engine`，Node 22.22.1、Go 1.26.0。CI 用 Node
 | WP16 | IDE/图可视化原型。 | 依赖 WP15。 | 可定位源代码及依据。 |
 | WP17 | 可选语义 Provider。 | 核心不依赖 LLM/Embedding/源码上传。 | 离线核心可独立运行，附加收益可量化。 |
 
-评估的用法与标注边界见 [BENCHMARKS.md](BENCHMARKS.md)，已实现的内部契约见 [ANALYZER-CONTRACT-ZH.md](ANALYZER-CONTRACT-ZH.md)。当前六组小型语料只是**起步基线**，不能宣称多语言准确率已经达到产品标准。原 WP11 模块解析并入 WP9；原 WP14 Benchmark 提前到 WP8-A。每个工作包仍只用一个有边界的任务分支，PR 记录量测证据。
+评估的用法与标注边界见 [BENCHMARKS.md](BENCHMARKS.md)，已实现的内部契约见 [ANALYZER-CONTRACT-ZH.md](ANALYZER-CONTRACT-ZH.md)。当前冻结的小型语料仍只是**起步基线**，不能宣称多语言准确率已经达到产品标准。原 WP11 模块解析并入 WP9；原 WP14 Benchmark 提前到 WP8-A。每个工作包仍只用一个有边界的任务分支，PR 记录量测证据。
 ## 5. 多语言支持原则
 
 CCE 的目标不是 Go / TypeScript / Vue 专用工具，而是多语言代码上下文引擎。

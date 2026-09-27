@@ -2,7 +2,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./schema.js";
-import { rebuildDependencyEdges, rebuildRouteHandlerEdges } from "./edges.js";
+import { rebuildDependencyEdges, rebuildEntryPointEdges, rebuildRouteHandlerEdges } from "./edges.js";
 
 function readSchemaVersion(db) {
   const hasMeta = db.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='meta'").get();
@@ -34,6 +34,9 @@ function migrateSchema(db, previousVersion) {
     if (!hasColumn(db, "files", "package_name")) {
       db.exec("ALTER TABLE files ADD COLUMN package_name TEXT");
     }
+  }
+  if (previousVersion < 9) {
+    rebuildEntryPointEdges(db);
   }
 }
 

@@ -4,9 +4,9 @@
 
 ## 调度与产出
 
-`analyzerFor(language)` 根据语言选分析器。描述包括 ID、支持语言、版本、证据类型、能力声明和批量 `analyze` 函数。批量结果以仓库相对路径为键。完成文件的规范化结果包含文件路径/语言/hash、版本、symbols、imports/calls dependencies、routes、DB 对象、可选 tests、包名和诊断。每条 Fact 在内存里带分析器 ID/版本以及 AST 或文本规则证据。当前的 route/client request/DB 提取仍是跨语言的启发式后处理；测试映射仍在图后处理阶段，不冒充语言原生分析能力。
+`analyzerFor(language)` 根据语言选分析器。描述包括 ID、支持语言、版本、证据类型、能力声明和批量 `analyze` 函数。批量结果以仓库相对路径为键。完成文件的规范化结果包含文件路径/语言/hash、版本、symbols、imports/calls dependencies、routes、DB 对象、entryPoints、可选 tests、包名和诊断。每条 Fact 在内存里带分析器 ID/版本以及 AST 或文本规则证据。当前的 route/client request/DB/非 HTTP 入口提取仍是跨语言的启发式后处理；测试映射仍在图后处理阶段，不冒充语言原生分析能力。WP14 的 entryPoints 仍是内部 Fact，不是冻结的公共 Schema。
 
-schema 8 的原有列、符号 ID、图边、遍历和检索排序没有换版。Fact 的新增 provenance **尚未作为公共事实结构持久化**，这件事留给以后的稳定 Schema 工作包。AST 事实不自动等于 `exact`。Go 适配器用 AST 保持源码符号稳定，再用 `go/packages`/`go/types` 的 object/selection 证据解析直接跨包函数、具体方法和泛型方法；通过接口值的调用即使当前只看到一个实现也保持 unresolved，WP11 不做 SSA/运行时分派预测。Vue 适配器只把 compiler-sfc 用于可信的 SFC block 结构和原始位置。
+schema 9 新增内部 `entry_points` 表；符号 ID、既有 HTTP route、图遍历和检索协议仍保持兼容。Fact provenance **尚未作为公共事实结构持久化**，稳定公共 Schema 仍留给 WP15。AST 事实不自动等于 `exact`。Go 适配器用 AST 保持源码符号稳定，再用 `go/packages`/`go/types` 的 object/selection 证据解析直接跨包函数、具体方法和泛型方法；通过接口值的调用即使当前只看到一个实现也保持 unresolved，WP11 不做 SSA/运行时分派预测。Vue 适配器只把 compiler-sfc 用于可信的 SFC block 结构和原始位置。WP14 只识别可静态描述的 Go `package main`/`func main`、直接 cron job 注册、consumer/queue 注册以及等价的 TS/JS schedule/consumer 形式；注释中的伪注册被忽略。handler 只有在直接已知、TS/JS/Vue 的简单 handler 位于同一文件，或 Go 的简单 handler 位于同目录同 package 时才形成 static `entry_handler`；跨文件 TS/JS 若缺少 import-binding 证据、带点的 handler 表达式缺少更强类型证据、或候选有歧义时都保持 unresolved。
 
 ## 失败处理
 
@@ -16,6 +16,6 @@ schema 8 的原有列、符号 ID、图边、遍历和检索排序没有换版�
 
 ## 版本与下一步
 
-`files.parser_version` 使用 `<全局解析版本>/contract1/<分析器ID>@<分析器版本>`；分析器版本变化仍只使对应分析器文件失效。WP11 把 Go typed resolution 视为 package graph 状态：存在 Go module/workspace 元数据时，`go.mod`/`go.sum`/`go.work`/`go.work.sum` 变化，或已跟踪 Go 文件修改、新增、删除，都会使本轮 Go 文件保守重算，避免跨包签名变化后留下陈旧 static edge；完全无变化的 warm index 仍是 0 changed。没有 module/workspace 元数据的仓库继续走 AST fallback 和原来的文件级行为。WP9/WP10 的 TS/JS/Vue 失效规则保持不变。通用路由/DB 规则变化仍需升级全局或契约版本。
+`files.parser_version` 使用 `<全局解析版本>/contract1/<分析器ID>@<分析器版本>`；分析器版本变化仍只使对应分析器文件失效。WP11 把 Go typed resolution 视为 package graph 状态：存在 Go module/workspace 元数据时，`go.mod`/`go.sum`/`go.work`/`go.work.sum` 变化，或已跟踪 Go 文件修改、新增、删除，都会使本轮 Go 文件保守重算，避免跨包签名变化后留下陈旧 static edge；完全无变化的 warm index 仍是 0 changed。没有 module/workspace 元数据的仓库继续走 AST fallback 和原来的文件级行为。WP9/WP10 的 TS/JS/Vue 失效规则保持不变。通用 route/DB/entry 文本规则变化仍需升级全局或契约版本；WP14 将全局 parser 升为 0.2.6，使旧索引在下一轮重新读取源码并填充 schema 9 的 entry facts。
 
 新语言适配器要给出真实能力、确定性版本、路径归属与 unresolved 依据，并为成功和失败路径添加 Ground Truth。Java/Python/C++ 编译器集成以及对外插件 ABI 属于后续工作包。验收运行 `npm test`、`npm run benchmark`；WP8-A 的已知漏检和误连仍是对照基线，默认 Benchmark 报告指标，不以这些已知问题阻断 WP8-B。

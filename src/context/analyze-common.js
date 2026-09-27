@@ -127,3 +127,165 @@ export function extractRoutes(text, filePath, symbols = []) {
   }
   return out;
 }
+
+function commentRanges(text) {
+  const ranges = [];
+  let index = 0;
+  let quote = null;
+  while (index < text.length) {
+    const current = text[index];
+    const next = text[index + 1];
+    if (quote) {
+      if (current === "\\") {
+        index += 2;
+        continue;
+      }
+      if (current === quote) quote = null;
+      index++;
+      continue;
+    }
+    if (current === '"' || current === "'" || current === "`") {
+      quote = current;
+      index++;
+      continue;
+    }
+    if (current === "/" && next === "/") {
+      const start = index;
+      index += 2;
+      while (index < text.length && text[index] !== "\n") index++;
+      ranges.push([start, index]);
+      continue;
+    }
+    if (current === "/" && next === "*") {
+      const start = index;
+      index += 2;
+      while (index < text.length && !(text[index] === "*" && text[index + 1] === "/")) index++;
+      index = Math.min(text.length, index + 2);
+      ranges.push([start, index]);
+      continue;
+    }
+    index++;
+  }
+  return ranges;
+}
+
+function insideRanges(index, ranges) {
+  return ranges.some(([start, end]) => index >= start && index < end);
+}
+
+function entryNodeId(kind, filePath, name, line) {
+  return "entry:" + kind + ":" + filePath + ":" + encodeURIComponent(name) + ":" + line;
+}
+
+function addEntry(out, seen, text, filePath, symbols, ranges, entry) {
+  const index = entry.index ?? 0;
+  if (insideRanges(index, ranges)) return;
+  const line = entry.line ?? lineOf(text, index);
+  const handlerRef = handlerReference(entry.handler_ref);
+  if (!handlerRef) return;
+  const key = [entry.kind, entry.name, handlerRef, line].join("|");
+  if (seen.has(key)) return;
+  seen.add(key);
+  out.push({
+    node_id: entryNodeId(entry.kind, filePath, entry.name, line),
+    file_path: filePath,
+    symbol_id: entry.symbol_id ?? nearestSymbol(symbols, line),
+    entry_kind: entry.kind,
+    entry_name: entry.name,
+    line,
+    handler_ref: handlerRef,
+    handler_symbol_id: entry.handler_symbol_id ?? null,
+    metadata: entry.metadata ?? {}
+  });
+}
+
+export function extractEntryPoints(
+  text,
+  filePath,
+  symbols = [],
+  { language = "", packageName = null } = {}
+) {
+  const out = [];
+  const seen = new Set();
+  const ranges = commentRanges(text);
+
+  if (language === "go" && packageName === "main") {
+    for (const symbol of symbols) {
+      if (symbol.kind !== "function" || symbol.name !== "main") continue;
+      addEntry(out, seen, text, filePath, symbols, ranges, {
+        kind: "cli",
+        name: "main",
+        line: symbol.line_start,
+        symbol_id: symbol.symbol_id,
+        handler_ref: "main",
+        handler_symbol_id: symbol.symbol_id,
+        metadata: { registration: "go_package_main" }
+      });
+    }
+  }
+
+  if ((language === "typescript" || language === "javascript")
+      && /^#!.*\bnode\b/m.test(text)) {
+    for (const symbol of symbols) {
+      if (symbol.kind !== "function" || symbol.name !== "main") continue;
+      addEntry(out, seen, text, filePath, symbols, ranges, {
+        kind: "cli",
+        name: "main",
+        line: symbol.line_start,
+        symbol_id: symbol.symbol_id,
+        handler_ref: "main",
+        handler_symbol_id: symbol.symbol_id,
+        metadata: { registration: "node_shebang_main" }
+      });
+    }
+  }
+
+  const registrations = [
+    {
+      kind: "job",
+      registration: "cron",
+      regex: /\.(AddFunc|AddJob|schedule)\s*\(\s*["'`]([^"'`]+)["'`]\s*,\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/g
+    },
+    {
+      kind: "job",
+      registration: "schedule_job",
+      regex: /\bscheduleJob\s*\(\s*["'`]([^"'`]+)["'`]\s*,\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/g,
+      methodGroup: null
+    },
+    {
+      kind: "consumer",
+      registration: "message_consumer",
+      regex: /\.(Subscribe|Consume|Process|subscribe|consume|process)\s*\(\s*["'`]([^"'`]+)["'`]\s*,\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/g
+    }
+  ];
+
+  for (const spec of registrations) {
+    for (const match of text.matchAll(spec.regex)) {
+      if (insideRanges(match.index ?? 0, ranges)) continue;
+      let name;
+      let handler;
+      let method;
+      if (spec.registration === "schedule_job") {
+        name = match[1];
+        handler = match[2];
+        method = "scheduleJob";
+      } else {
+        method = match[1];
+        name = match[2];
+        handler = match[3];
+      }
+      addEntry(out, seen, text, filePath, symbols, ranges, {
+        index: match.index,
+        kind: spec.kind,
+        name,
+        handler_ref: handler,
+        metadata: {
+          registration: spec.registration,
+          method
+        }
+      });
+    }
+  }
+
+  return out;
+}

@@ -1,7 +1,7 @@
 import { analyzeGoFiles, GO_ANALYZER_VERSION } from "./go-runner.js";
 import { analyzeTypeScriptFiles, TYPESCRIPT_ANALYZER_VERSION } from "./analyze-typescript.js";
 import { analyzeVueFiles, VUE_ANALYZER_VERSION } from "./analyze-vue.js";
-import { extractDbObjects, extractRoutes } from "./analyze-common.js";
+import { extractDbObjects, extractEntryPoints, extractRoutes } from "./analyze-common.js";
 import { PARSER_VERSION } from "./schema.js";
 
 export const ANALYZER_CONTRACT_VERSION = 1;
@@ -103,6 +103,15 @@ function normalizedFacts(item, raw, analyzer) {
     .map((fact) => ({ ...fact, provenance: { ...provenance, evidence: "text_pattern" } }));
   const dbObjects = extractDbObjects(item.text, item.relPath, symbols)
     .map((fact) => ({ ...fact, provenance: { ...provenance, evidence: "text_pattern" } }));
+  const entryPoints = extractEntryPoints(
+    item.text,
+    item.relPath,
+    symbols,
+    { language: item.language, packageName: raw.package ?? null }
+  ).map((fact) => ({
+    ...fact,
+    provenance: { ...provenance, evidence: "text_pattern" }
+  }));
   const diagnostics = (Array.isArray(raw.diagnostics) ? raw.diagnostics : [])
     .map((entry) => ({
       file: item.relPath, analyzer_id: analyzer.id,
@@ -115,7 +124,8 @@ function normalizedFacts(item, raw, analyzer) {
     },
     language: item.language, analyzer_id: analyzer.id,
     parser_version: provenance.parser_version, package: raw.package ?? null,
-    symbols, dependencies, routes, dbObjects, tests: raw.tests ?? [], diagnostics
+    symbols, dependencies, routes, dbObjects, entryPoints,
+    tests: raw.tests ?? [], diagnostics
   };
 }
 

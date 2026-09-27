@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "cases": [
     {
       "name": "vue-ts-go-http",
@@ -453,6 +453,100 @@
           "type": "call",
           "from": "symbol:typescript:packages/b/src/page.ts::loadB",
           "to": "symbol:typescript:packages/a/src/api/users.ts::fetchUsers",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "go-non-http-entry-flow",
+      "fixture": "entry-go",
+      "query": "tasks.created consumer daily cleanup audit",
+      "maxFiles": 6,
+      "relevantFiles": [
+        "cmd/worker/main.go"
+      ],
+      "edges": [
+        {
+          "type": "entry_handler",
+          "from": "entry:cli:cmd/worker/main.go:main:10",
+          "to": "symbol:go:cmd/worker/main.go::main",
+          "present": true
+        },
+        {
+          "type": "entry_handler",
+          "from": "entry:job:cmd/worker/main.go:%40daily:11",
+          "to": "symbol:go:cmd/worker/main.go::RunCleanup",
+          "present": true
+        },
+        {
+          "type": "entry_handler",
+          "from": "entry:consumer:cmd/worker/main.go:tasks.created:12",
+          "to": "symbol:go:cmd/worker/main.go::HandleTask",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:go:cmd/worker/main.go::RunCleanup",
+          "to": "symbol:go:cmd/worker/main.go::WriteAudit",
+          "present": true
+        },
+        {
+          "type": "call",
+          "from": "symbol:go:cmd/worker/main.go::HandleTask",
+          "to": "symbol:go:cmd/worker/main.go::WriteAudit",
+          "present": true
+        },
+        {
+          "type": "db_write",
+          "from": "symbol:go:cmd/worker/main.go::WriteAudit",
+          "to": "db:table:audit_events",
+          "present": true
+        },
+        {
+          "type": "entry_handler",
+          "from": "entry:consumer:cmd/worker/main.go:tasks.created:12",
+          "to": "symbol:go:cmd/worker/main.go::RunCleanup",
+          "present": false
+        },
+        {
+          "type": "entry_handler",
+          "from": "entry:consumer:cmd/worker/main.go:ghost:20",
+          "to": "ref:entry_handler:GhostHandler",
+          "present": false
+        }
+      ]
+    },
+    {
+      "name": "ts-non-http-entry-flow",
+      "fixture": "entry-ts",
+      "query": "emails consumer daily digest",
+      "maxFiles": 5,
+      "relevantFiles": [
+        "src/worker.ts"
+      ],
+      "edges": [
+        {
+          "type": "entry_handler",
+          "from": "entry:job:src/worker.ts:%40daily:3",
+          "to": "symbol:typescript:src/worker.ts::RunDigest",
+          "present": true
+        },
+        {
+          "type": "entry_handler",
+          "from": "entry:consumer:src/worker.ts:emails:4",
+          "to": "symbol:typescript:src/worker.ts::HandleEmail",
+          "present": true
+        },
+        {
+          "type": "entry_handler",
+          "from": "entry:consumer:src/worker.ts:emails:4",
+          "to": "symbol:typescript:src/worker.ts::RunDigest",
+          "present": false
+        },
+        {
+          "type": "entry_handler",
+          "from": "entry:consumer:src/worker.ts:ghost:5",
+          "to": "ref:entry_handler:GhostHandler",
           "present": false
         }
       ]

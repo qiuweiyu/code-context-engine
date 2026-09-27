@@ -13,6 +13,7 @@ export async function exportIndex(db, indexDir) {
   await fs.mkdir(indexDir, { recursive: true });
   const files = db.prepare("SELECT * FROM files ORDER BY path").all();
   const symbols = db.prepare("SELECT * FROM symbols ORDER BY file_path,line_start,symbol_id").all().map((row) => ({ ...row, params: JSON.parse(row.params_json), returns: JSON.parse(row.returns_json), params_json: undefined, returns_json: undefined }));
+  const entryPoints = db.prepare("SELECT * FROM entry_points ORDER BY file_path,line,id").all();
   const routes = db.prepare("SELECT * FROM routes ORDER BY file_path,line").all();
   const tables = db.prepare("SELECT * FROM db_objects ORDER BY object_name,file_path,line").all();
   const tests = db.prepare("SELECT * FROM tests ORDER BY test_file,target_file").all();
@@ -36,6 +37,7 @@ export async function exportIndex(db, indexDir) {
     writeJsonlAtomic(path.join(indexDir, "files.jsonl"), files),
     writeJsonlAtomic(path.join(indexDir, "symbols.jsonl"), symbols),
     writeJsonlAtomic(path.join(indexDir, "features.jsonl"), features),
+    writeJsonlAtomic(path.join(indexDir, "entry-points.jsonl"), entryPoints),
     writeJsonlAtomic(path.join(indexDir, "routes.jsonl"), routes),
     writeJsonlAtomic(path.join(indexDir, "tables.jsonl"), tables),
     writeJsonlAtomic(path.join(indexDir, "tests.jsonl"), tests),
@@ -50,6 +52,7 @@ export async function exportIndex(db, indexDir) {
       files: db.prepare("SELECT COUNT(*) AS n FROM files").get().n,
       symbols: symbols.length,
       features: features.length,
+      entry_points: entryPoints.length,
       routes: routes.length,
       db_objects: tables.length,
       tests: tests.length,

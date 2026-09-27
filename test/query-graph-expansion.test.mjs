@@ -56,7 +56,7 @@ test("query retrieval expands lexical business anchors through typed graph", asy
     await git(root, "commit", "-qm", "init");
 
     const indexed = await indexRepository({ repoRoot: root });
-    assert.equal(indexed.manifest.schema_version, 8);
+    assert.equal(indexed.manifest.schema_version, 9);
 
     const query = queryContext({
       repoRoot: root,
