@@ -6,12 +6,20 @@ import { fileURLToPath } from "node:url";
 import { sha256Text } from "./hash.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const helperSource = path.resolve(here, "../../internal/goindexer/main.go");
+const helperDir = path.resolve(here, "../../internal/goindexer");
+const helperSource = path.join(helperDir, "main.go");
+const helperModule = path.join(helperDir, "go.mod");
+const helperSum = path.join(helperDir, "go.sum");
+export const GO_ANALYZER_VERSION = "2";
 let cachedBinaryPromise = null;
 
-function runProcess(command, args, { input = "", timeout = 120000 } = {}) {
+function runProcess(command, args, { input = "", timeout = 120000, cwd } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+    const child = spawn(command, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+      ...(cwd ? { cwd } : {})
+    });
     let stdout = "", stderr = "";
     const timer = setTimeout(() => { child.kill(); reject(new Error(`${command} timed out`)); }, timeout);
     child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");
@@ -28,8 +36,12 @@ function runProcess(command, args, { input = "", timeout = 120000 } = {}) {
 }
 
 async function buildHelperBinary() {
-  const src = await fs.readFile(helperSource, "utf8");
-  const digest = sha256Text(src).slice(0, 16);
+  const parts = [
+    await fs.readFile(helperSource, "utf8"),
+    await fs.readFile(helperModule, "utf8"),
+    await fs.readFile(helperSum, "utf8").catch(() => "")
+  ];
+  const digest = sha256Text(parts.join("\n--cce-go-helper--\n")).slice(0, 16);
   const ext = process.platform === "win32" ? ".exe" : "";
   const dir = path.join(os.tmpdir(), "code-context-engine");
   await fs.mkdir(dir, { recursive: true });
@@ -47,7 +59,10 @@ async function buildHelperBinary() {
   await fs.rm(buildOutput, { force: true });
 
   try {
-    await runProcess("go", ["build", "-o", buildOutput, helperSource], { timeout: 120000 });
+    await runProcess("go", ["build", "-o", buildOutput, "."], {
+      timeout: 120000,
+      cwd: helperDir
+    });
 
     try {
       await fs.rename(buildOutput, binary);

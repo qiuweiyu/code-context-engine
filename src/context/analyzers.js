@@ -1,4 +1,4 @@
-import { analyzeGoFiles } from "./go-runner.js";
+import { analyzeGoFiles, GO_ANALYZER_VERSION } from "./go-runner.js";
 import { analyzeTypeScriptFiles, TYPESCRIPT_ANALYZER_VERSION } from "./analyze-typescript.js";
 import { analyzeVueFiles, VUE_ANALYZER_VERSION } from "./analyze-vue.js";
 import { extractDbObjects, extractRoutes } from "./analyze-common.js";
@@ -19,7 +19,7 @@ function descriptor(id, languages, version, evidence, capabilities, analyze) {
 }
 
 export function createAnalyzerRegistry({
-  goVersion = "1",
+  goVersion = GO_ANALYZER_VERSION,
   scriptVersion = TYPESCRIPT_ANALYZER_VERSION,
   vueVersion = VUE_ANALYZER_VERSION,
   textVersion = "1",
@@ -32,8 +32,8 @@ export function createAnalyzerRegistry({
   })
 } = {}) {
   return Object.freeze([
-    descriptor("go-ast", ["go"], goVersion, "ast",
-      { symbols: "static", imports: "static", calls: "static", types: "heuristic", exactResolution: "unsupported" },
+    descriptor("go-packages-types", ["go"], goVersion, "ast+types",
+      { symbols: "static", imports: "static", calls: "static", types: "static", exactResolution: "static" },
       goAnalyze),
     descriptor("typescript-compiler", ["typescript", "javascript"], scriptVersion, "ast",
       { symbols: "static", imports: "static", calls: "static", types: "static", exactResolution: "static" },
