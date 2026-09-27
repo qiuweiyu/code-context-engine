@@ -17,20 +17,20 @@ git --version
 go version
 ```
 
-## Windows PowerShell 安装
+## 安装
 
-建议把 CCE 作为独立开发工具安装，不要直接放进业务项目。
+推荐的公开安装方式：
 
 ```powershell
-New-Item -ItemType Directory -Force D:\Tools | Out-Null
-cd D:\Tools
-git clone https://github.com/qiuweiyu/code-context-engine.git
-cd D:\Tools\code-context-engine
-npm install
-npm test
+npm install -g code-context-engine
+cce --help
 ```
 
-`npm test` 通过后，再用于真实项目。
+也可以不做全局安装直接试用：
+
+```powershell
+npx code-context-engine --help
+```
 
 ## 避免生成数据污染业务仓库 Git 状态
 
@@ -50,8 +50,7 @@ if (-not (Select-String -Path $exclude -Pattern '^\.context-index/$' -Quiet -Err
 ## 第一次建立索引
 
 ```powershell
-cd D:\Tools\code-context-engine
-node .\src\cli.js index --repo "D:\Path\To\YourProject"
+cce index --repo "D:\Path\To\YourProject"
 ```
 
 成功结果应包含：
@@ -65,7 +64,7 @@ node .\src\cli.js index --repo "D:\Path\To\YourProject"
 ## 查看索引状态
 
 ```powershell
-node .\src\cli.js status --repo "D:\Path\To\YourProject"
+cce status --repo "D:\Path\To\YourProject"
 Get-Content "D:\Path\To\YourProject\.context-index\manifest.json"
 ```
 
@@ -101,7 +100,7 @@ Get-Content "D:\Path\To\YourProject\.context-index\manifest.json"
 ## 根据开发任务查询相关代码
 
 ```powershell
-node .\src\cli.js query --repo "D:\Path\To\YourProject" --task "编辑未发布的人工任务"
+cce query --repo "D:\Path\To\YourProject" --task "编辑未发布的人工任务"
 ```
 
 建议先读取 `must_read`，上下文不足时再看 `maybe_read`。查询没有命中，不代表功能一定不存在。
@@ -113,7 +112,7 @@ node .\src\cli.js query --repo "D:\Path\To\YourProject" --task "编辑未发布�
 对于非 HTTP 流程，可以先查看 `.context-index/entry-points.jsonl`，也可以按 job/topic 名称查询，然后把其中的 `node_id` 交给 flow：
 
 ```powershell
-node .\src\cli.js flow --repo "D:\Path\To\YourProject" --start "entry:job:cmd/worker/main.go:%40daily:11" --edge-types entry_handler,call,db_read,db_write,test_of
+cce flow --repo "D:\Path\To\YourProject" --start "entry:job:cmd/worker/main.go:%40daily:11" --edge-types entry_handler,call,db_read,db_write,test_of
 ```
 
 WP14 只识别有静态依据的入口模式（如 Go `package main`、直接 cron 注册、直接 consumer/queue 注册）。TS/JS 的简单 handler 只在同文件内解析，Go handler 可在同目录同 package 内解析；跨文件 TS/JS 或其他证据不足/有歧义的 handler 保持 unresolved，不猜运行时目标。
@@ -125,7 +124,7 @@ WP14 只识别有静态依据的入口模式（如 Go `package main`、直接 cr
 显式导出 SCIP：
 
 ```powershell
-node .\src\cli.js export-scip --repo "D:\Path\To\YourProject" --out "D:\Path\To\index.scip"
+cce export-scip --repo "D:\Path\To\YourProject" --out "D:\Path\To\index.scip"
 ```
 
 SCIP 不会自动导出；只有能够证明唯一源码 byte range 的定义才会生成 definition occurrence。Plugin Protocol v1 目前只定义和校验 JSON 消息，WP15 不会自动发现或执行仓库里的插件命令。
@@ -137,13 +136,13 @@ Public Index v1 兼容规则、迁移示例、SCIP 范围和 Plugin Protocol v1 
 只返回 Public Index 节点对应的编辑器/文件 URI，不自动启动编辑器：
 
 ```powershell
-node .\src\cli.js locate --repo "D:\Path\To\YourProject" --node "symbol:typescript:src/app.ts::Handle"
+cce locate --repo "D:\Path\To\YourProject" --node "symbol:typescript:src/app.ts::Handle"
 ```
 
 生成单文件离线图查看器：
 
 ```powershell
-node .\src\cli.js graph-html --repo "D:\Path\To\YourProject" --out ".\cce-graph.html"
+cce graph-html --repo "D:\Path\To\YourProject" --out ".\cce-graph.html"
 ```
 
 可使用 `--focus <public-node-id> --max-nodes 120 --max-hops 3` 只导出有界邻域。查看器只消费 Public Index v1，不嵌入仓库源码正文、不使用 CDN，并保持 unresolved evidence 的 unresolved 状态。
@@ -174,7 +173,7 @@ node .\src\cli.js graph-html --repo "D:\Path\To\YourProject" --out ".\cce-graph.
 代码修改后重新执行同一个命令：
 
 ```powershell
-node .\src\cli.js index --repo "D:\Path\To\YourProject"
+cce index --repo "D:\Path\To\YourProject"
 ```
 
 CCE 会比较内容 hash：未变化文件直接 `skipped`，只重新分析变化文件。派生 typed edge 会在 index 过程中基于当前事实重新生成，因此如果升级的 CCE 只修改了 edge 构建逻辑，即使 `changed_files = 0` 也应正常再执行一次 `index`；只要 Parser/Schema 没要求全量刷新，就不需要 `--force`。
@@ -197,14 +196,14 @@ CCE 会比较内容 hash：未变化文件直接 `skipped`，只重新分析变�
 正常情况下不需要 `--force`。只有 parser 升级、调试索引或明确验证完整重建时使用：
 
 ```powershell
-node .\src\cli.js index --repo "D:\Path\To\YourProject" --force
+cce index --repo "D:\Path\To\YourProject" --force
 ```
 
 也可以安全删除 `.context-index` 后重建：
 
 ```powershell
 Remove-Item "D:\Path\To\YourProject\.context-index" -Recurse -Force -ErrorAction SilentlyContinue
-node .\src\cli.js index --repo "D:\Path\To\YourProject"
+cce index --repo "D:\Path\To\YourProject"
 ```
 
 ## SQLite ExperimentalWarning
@@ -216,14 +215,34 @@ Node.js 22 可能显示 `ExperimentalWarning: SQLite is an experimental feature`
 ## Linux / macOS
 
 ```bash
+npm install -g code-context-engine
+cce --help
+cce index --repo /path/to/project
+cce status --repo /path/to/project
+cce query --repo /path/to/project --task "your current task"
+```
+
+贡献者/源码安装：
+
+```bash
 git clone https://github.com/qiuweiyu/code-context-engine.git
 cd code-context-engine
 npm install
 npm test
-node ./src/cli.js index --repo /path/to/project
-node ./src/cli.js status --repo /path/to/project
-node ./src/cli.js query --repo /path/to/project --task "your current task"
 ```
+
+## Optional Semantic Provider
+
+默认 Query 路径是确定性的。只有显式指定 Provider 时才会启用语义 rerank：
+
+```bash
+cce query \
+  --repo /path/to/project \
+  --task "查找老师布置作业的位置" \
+  --semantic-provider /path/to/provider.json
+```
+
+Provider 只能重排确定性 Retriever 已经产生的有限候选。Provider 非法、崩溃或超时都会 fallback 到确定性结果。详细协议见 [SEMANTIC-PROVIDER-ZH.md](SEMANTIC-PROVIDER-ZH.md)。
 
 ## MCP
 
@@ -232,3 +251,19 @@ node ./src/cli.js query --repo /path/to/project --task "your current task"
 - `context_index_repo`
 - `context_query`
 - `context_index_status`
+
+启动 MCP 时，把可访问目录限制到尽可能小：
+
+```bash
+export CCE_ALLOWED_ROOTS=/home/me/projects
+code-context-engine-mcp
+```
+
+PowerShell：
+
+```powershell
+$env:CCE_ALLOWED_ROOTS = "D:\Projects"
+code-context-engine-mcp
+```
+
+当前版本边界见 [KNOWN-LIMITATIONS-ZH.md](KNOWN-LIMITATIONS-ZH.md)。

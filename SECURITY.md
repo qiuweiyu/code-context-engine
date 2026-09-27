@@ -2,7 +2,9 @@
 
 ## Source privacy
 
-Code Context Engine is intended to operate locally. The core engine does not upload source code or require an external model/API.
+Code Context Engine is intended to operate locally. The deterministic core does not upload source code or require an external model/API.
+
+Semantic Provider v1 is optional and explicit opt-in. CCE-owned provider requests contain bounded task/candidate metadata and do not contain source-file bodies. A user-configured external provider is a separate process and may have its own network/privacy behavior; review that provider before enabling it.
 
 ## Sensitive files
 

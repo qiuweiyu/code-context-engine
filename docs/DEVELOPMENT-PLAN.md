@@ -1,31 +1,27 @@
 # CCE Development Plan
 
-Status: **WP8-A merged; WP8-B implementation in progress; WP9 and later planned**.
+Status: **WP8-A through WP17 are merged; WP18 public-release readiness is active.**
 
-Planning baseline: `4f69f4852bc622ed7ae281a268498fd7f2daaf86` (v0.1.7). Documentation baseline: `8ef900b7f51182cbe5af63cfb3fb13686e6a9299`.
+Current accepted main baseline before WP18: `f68924463c2408de5e61fb362f838a19397df8ed`. WP18 release target: `v0.2.0`.
 
-On 2026-09-27 Ubuntu `/opt/CCE/code-context-engine` main, origin/main and GitHub main were verified equal to `8ef900b7...` with divergence 0/0; 38/38 regression tests passed. A pre-existing untracked `package-lock.json` was preserved. Windows sync was not verified in this development turn. WP8-A was merged as `f138b03caec29c323cb9f59fdb2b6670be009d42`. WP8-B starts from this merged baseline.
+The historical untracked `package-lock.json` remains protected and must not be added, deleted or rewritten. Its accepted SHA-256 is `771655d3d1dfa7abfd04a8a86c4b4fe533b6a5521a7951bb976a53678beda710`.
 
 ## 1. Current accepted baseline
 
-WP7 is complete.
+WP17 is complete. Accepted release-readiness baseline facts:
 
-Accepted facts before this documentation-only update:
-
-- version: `0.1.7`
-- main code baseline: `4f69f4852bc622ed7ae281a268498fd7f2daaf86`
-- post-merge tests: 38/38 PASS
-- GitHub CI: Ubuntu + Windows PASS
-- Compact CLI/MCP projection: accepted
-- Full output compatibility: preserved in WP7 acceptance
-- three real SGC Compact benchmarks: approximately 93% serialized-output reduction while preserving selected paths, coverage status and tests
-- typed graph, bounded traversal and cross-surface retrieval are already implemented
-
-The documentation convergence created `8ef900b7...`; Ubuntu main was verified at that commit before the WP8-A branch was created.
+- package version before WP18: `0.1.7`; WP18 target: `0.2.0`
+- main/origin/main: `f68924463c2408de5e61fb362f838a19397df8ed` at WP18 start
+- regression suite: 85/85 PASS
+- deterministic Ground Truth v6: TP=34, FP=1, FN=0
+- Semantic Corpus v1 gate: PASS; OFF/ON MRR 0.1567 → 0.4567
+- Public Index v1, SCIP, Plugin Protocol v1, locate and offline graph are merged
+- Optional Semantic Provider v1 is merged and explicit opt-in only
+- Ubuntu and Windows CI are active release gates
 
 ## 2. Current development state
 
-Ubuntu main synchronization and the existing test gate passed on 2026-09-27. Work is now on `work/cce-wp8b-analyzer-contract`. The pre-existing untracked lockfile has not been added, overwritten or removed. GitHub main is the WP8-A merge baseline until WP8-B PR acceptance.
+WP18 runs on `work/cce-wp18-release-readiness` from the accepted WP17 main. Its scope is packaging, public documentation, clean-install smoke, release CI, tag and GitHub Release. It does not add new analyzers or retrieval algorithms.
 
 ## 3. Environment and subsequent sync gates
 
@@ -35,7 +31,7 @@ Ubuntu: `/opt/CCE/code-context-engine`, Node 22.22.1, Go 1.26.0. CI uses Node 22
 
 ## 4. Revised engineering sequence (2026-09-27)
 
-This sequence supersedes the earlier ordering that placed the first accuracy corpus at WP14. WP8-A through WP16 are merged. The conditional WP12 SSA/callgraph gate remains deferred because the frozen corpus has no labeled false negative requiring SSA. WP17 is now active on `work/cce-wp17-semantic-providers`; Semantic Provider Protocol v1, its privacy boundary and bounded rank-fusion rule are frozen in [SEMANTIC-PROVIDER.md](SEMANTIC-PROVIDER.md). An analyzer change must be measured against a frozen corpus, not just the regression suite.
+This sequence supersedes the earlier ordering that placed the first accuracy corpus at WP14. WP8-A through WP17 are merged. The conditional WP12 SSA/callgraph gate remains deferred because the frozen corpus has no labeled false negative requiring SSA. WP18 is the active release-readiness package; analyzer changes remain out of scope unless a release blocker is proven.
 
 | Package | Goal and scope | Non-goals / dependency | Acceptance and risk |
 | --- | --- | --- | --- |
@@ -50,6 +46,7 @@ This sequence supersedes the earlier ordering that placed the first accuracy cor
 | WP15 | SCIP, stable public schema and third-party plugin API design. | Do not freeze public ABI before multiple analyzers. | Versioned consumer compatibility and migration samples. |
 | WP16 | IDE and graph visualization prototypes. | Depends on WP15. | Navigable code and evidence. |
 | WP17 | Optional semantic providers only: versioned local process protocol, bounded reranking and explicit opt-in. | No required LLM, embedding, vendor SDK, source upload or provider-owned graph facts. | Provider-disabled baseline stays compatible; provider OFF/ON retrieval benefit, latency and fallback behavior are measured. |
+| WP18 | First public release readiness: npm package surface, public docs, clean-install smoke, release CI, tag and GitHub Release. | No analyzer/retriever feature expansion. | Reproducible v0.2.0 tarball, Ubuntu/Windows PASS, post-merge verification and release artifacts. |
 
 Benchmark usage and labeling limits: [BENCHMARKS.md](BENCHMARKS.md). The implemented internal boundary is documented in [ANALYZER-CONTRACT.md](ANALYZER-CONTRACT.md). The current small corpus is a **seed baseline**, not a completed multi-language accuracy claim. The originally proposed WP11 module-resolution work is merged into WP9; the originally proposed WP14 benchmark starts in WP8-A. Keep one bounded branch per package and record measured evidence in the PR.
 ## 5. Language expansion policy
@@ -101,4 +98,4 @@ Avoid accumulating unnecessary long-lived branches.
 
 ## 7. Next action
 
-Finish WP8-B contract tests and benchmark comparison, review its PR, then start WP9 on an accepted main. Broaden WP8-A seed labels before promoting strict quality gates.
+Finish WP18 packaging/docs/release gates, merge on accepted main, verify the v0.2.0 tarball, create the v0.2.0 tag and GitHub Release, then start the next feature package from that release baseline.

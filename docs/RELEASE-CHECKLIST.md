@@ -21,25 +21,25 @@ The deterministic core remains the default; Semantic Provider v1 remains explici
 
 ## Documentation gate
 
-- [ ] README / README-ZH describe current v0.2.0 capabilities rather than old milestones.
-- [ ] npm-first installation is the primary public path.
-- [ ] Quick Start provides a reproducible 5–10 minute workflow.
-- [ ] supported languages and limitations are explicit.
-- [ ] deterministic default and optional Semantic Provider v1 are explicit.
-- [ ] MCP example is current.
-- [ ] flow / locate / graph-html / export-scip commands are discoverable.
-- [ ] privacy and security boundaries are current.
-- [ ] CHANGELOG contains the v0.2.0 release entry.
+- [x] README / README-ZH describe current v0.2.0 capabilities rather than old milestones.
+- [x] npm-first installation is the primary public path.
+- [x] Quick Start provides a reproducible 5–10 minute workflow.
+- [x] supported languages and limitations are explicit.
+- [x] deterministic default and optional Semantic Provider v1 are explicit.
+- [x] MCP example is current.
+- [x] flow / locate / graph-html / export-scip commands are discoverable.
+- [x] privacy and security boundaries are current.
+- [x] CHANGELOG contains the v0.2.0 release entry.
 
 ## Quality gate
 
 - [ ] `npm test` passes.
 - [ ] deterministic `benchmark:gate` passes.
 - [ ] `benchmark:semantic:gate` passes.
-- [ ] `npm run release:smoke` passes.
+- [x] `npm run release:smoke` passes.
 - [ ] Ubuntu CI passes.
 - [ ] Windows CI passes.
-- [ ] protected historical `package-lock.json` remains untracked and unchanged.
+- [x] protected historical `package-lock.json` remains untracked and unchanged.
 
 ## Release gate
 

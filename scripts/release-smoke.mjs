@@ -39,7 +39,9 @@ async function verifyPackSurface() {
     "src/cli.js", "src/server.js", "src/context/indexer.js",
     "src/semantic/provider-v1.js", "internal/goindexer/main.go",
     "internal/scipexporter/main.go", "docs/QUICKSTART.md",
-    "docs/INTEROPERABILITY.md", "docs/SEMANTIC-PROVIDER.md",
+    "docs/QUICKSTART-ZH.md", "docs/INTEROPERABILITY.md",
+    "docs/SEMANTIC-PROVIDER.md", "docs/KNOWN-LIMITATIONS.md",
+    "docs/RELEASE-NOTES-v0.2.0.md", "CHANGELOG.md",
     "scripts/release-smoke.mjs"
   ];
   const missing = required.filter((entry) => !files.includes(entry));

@@ -1,31 +1,27 @@
 # CCE 后续开发计划
 
-状态：**WP8-A 已合并；WP8-B 开发中；WP9 及之后尚在规划阶段**。
+状态：**WP8-A 到 WP17 已合并；WP18 第一版公开 Release Readiness 正在进行。**
 
-规划前代码基线：`4f69f4852bc622ed7ae281a268498fd7f2daaf86`（v0.1.7）；文档基线：`8ef900b7f51182cbe5af63cfb3fb13686e6a9299`。
+WP18 开始前已验收 main 基线：`f68924463c2408de5e61fb362f838a19397df8ed`；WP18 Release 目标：`v0.2.0`。
 
-2026-09-27 实测 Ubuntu `/opt/CCE/code-context-engine` 的 main、origin/main 与 GitHub main 均为 `8ef900b7...`，分叉 0/0，原有 38/38 测试通过。保留原有未跟踪 `package-lock.json`。本轮没有核验 Windows 同步。WP8-A 已合并为 `f138b03caec29c323cb9f59fdb2b6670be009d42`，WP8-B 从该已合并基线建立分支。
+历史未跟踪 `package-lock.json` 继续受保护，不得加入、删除或重写。已验收 SHA-256：`771655d3d1dfa7abfd04a8a86c4b4fe533b6a5521a7951bb976a53678beda710`。
 
 ## 1. 当前已验收基线
 
-WP7 已完成。
+WP17 已完成。进入 WP18 时的已验收事实：
 
-本次文档更新前已经验收的事实：
-
-- 版本：`0.1.7`
-- 代码基线：`4f69f4852bc622ed7ae281a268498fd7f2daaf86`
-- 合并后测试：38/38 PASS
-- GitHub CI：Ubuntu + Windows PASS
-- Compact CLI/MCP 输出：已验收
-- WP7 Full 输出兼容性：保持
-- 真实 SGC 三组 Compact Benchmark：序列化输出约减少 93%，且待读路径、coverage 状态和 tests 保持
-- typed graph、有界 traversal、跨 surface retrieval 已经属于当前实现，不再列为未来能力
-
-文档收口产生 `8ef900b7...`；创建 WP8-A 分支前，Ubuntu main 已实测同步至该提交。
+- WP18 前 package version：`0.1.7`；WP18 目标：`0.2.0`
+- main/origin/main：`f68924463c2408de5e61fb362f838a19397df8ed`
+- Regression：85/85 PASS
+- Ground Truth v6：TP=34、FP=1、FN=0
+- Semantic Corpus v1：PASS；OFF/ON MRR 0.1567 → 0.4567
+- Public Index v1、SCIP、Plugin Protocol v1、Locate、Offline Graph 已合并
+- Optional Semantic Provider v1 已合并，且只能显式启用
+- Ubuntu + Windows CI 均属于 Release Gate
 
 ## 2. 当前开发状态
 
-Ubuntu main 的同步及原有测试门禁于 2026-09-27 通过。目前在 `work/cce-wp8b-analyzer-contract` 上推进。原有未跟踪 lockfile 没有加入、覆盖或删除。在 WP8-B PR 验收前，GitHub main 以 WP8-A 合并提交为基线。
+WP18 从已验收 WP17 main 建立 `work/cce-wp18-release-readiness`。范围仅包括打包、公开文档、Clean Install Smoke、Release CI、Tag 与 GitHub Release；不新增 Analyzer 或 Retrieval Algorithm。
 
 ## 3. 环境与后续同步门禁
 
@@ -35,7 +31,7 @@ Ubuntu：`/opt/CCE/code-context-engine`，Node 22.22.1、Go 1.26.0。CI 用 Node
 
 ## 4. 调整后的工程顺序（2026-09-27）
 
-本节替代旧的“到 WP14 才建立首个准确率语料”的顺序。WP8-A 到 WP16 已合并。条件式 WP12 SSA/callgraph 门槛继续暂缓，因为当前冻结语料没有需要 SSA 才能解决的已标注漏检。WP17 已在 `work/cce-wp17-semantic-providers` 启动；Semantic Provider Protocol v1、隐私边界和有界 rank-fusion 规则已在 [SEMANTIC-PROVIDER-ZH.md](SEMANTIC-PROVIDER-ZH.md) 冻结。分析器升级要和固定标注语料对比，不能只看回归测试全绿。
+本节替代旧的“到 WP14 才建立首个准确率语料”的顺序。WP8-A 到 WP17 已合并。条件式 WP12 SSA/callgraph 门槛继续暂缓，因为当前冻结语料没有需要 SSA 才能解决的已标注漏检。当前进入 WP18 Release Readiness；除非发现明确 Release Blocker，否则不再改 Analyzer。
 
 | 工作包 | 目标与范围 | 非目标与依赖 | 验收与风险 |
 | --- | --- | --- | --- |
@@ -50,6 +46,7 @@ Ubuntu：`/opt/CCE/code-context-engine`，Node 22.22.1、Go 1.26.0。CI 用 Node
 | WP15 | SCIP、稳定公共 Schema 和第三方插件 API。 | 不过早冻结 ABI；依赖多个真实分析器。 | 有版本化消费者及迁移案例。 |
 | WP16 | IDE/图可视化原型。 | 依赖 WP15。 | 可定位源代码及依据。 |
 | WP17 | 可选语义 Provider：版本化本地进程协议、有界 rerank、显式 opt-in。 | 核心不依赖 LLM/Embedding/厂商 SDK/源码上传，Provider 不拥有图事实。 | Provider 关闭时基线兼容；量化 OFF/ON 检索收益、延迟和 fallback。 |
+| WP18 | 第一版公开 Release Readiness：npm 包面、公开文档、Clean Install Smoke、Release CI、Tag 与 GitHub Release。 | 不扩 Analyzer/Retriever 功能。 | v0.2.0 tarball 可重复安装，Ubuntu/Windows PASS，完成 Post-merge 与 Release Artifact。 |
 
 评估的用法与标注边界见 [BENCHMARKS.md](BENCHMARKS.md)，已实现的内部契约见 [ANALYZER-CONTRACT-ZH.md](ANALYZER-CONTRACT-ZH.md)。当前冻结的小型语料仍只是**起步基线**，不能宣称多语言准确率已经达到产品标准。原 WP11 模块解析并入 WP9；原 WP14 Benchmark 提前到 WP8-A。每个工作包仍只用一个有边界的任务分支，PR 记录量测证据。
 ## 5. 多语言支持原则
@@ -101,4 +98,4 @@ WP8 Contract 稳定后，建议语言扩展优先级：
 
 ## 7. 下一步
 
-先完成 WP8-B 契约测试、Benchmark 对照和 PR 审阅；验收合并后再从新 main 进入 WP9。提升严格质量门禁前继续扩充 WP8-A 语料。
+完成 WP18 打包、文档与 Release Gate；合并到已验收 main 后验证 v0.2.0 tarball，创建 v0.2.0 Tag 与 GitHub Release，再从该 Release Baseline 开始下一功能包。
