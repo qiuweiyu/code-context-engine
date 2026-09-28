@@ -372,7 +372,10 @@ function applyIntentPathBoost(files, builtinTerms) {
 
 function applyDeveloperIntentSurfaceBoost(files, fileRows, expansion) {
   const groups = (expansion.applied_aliases ?? [])
-    .filter((entry) => entry.source === "developer")
+    .filter((entry) =>
+      entry.source === "developer"
+      && !["test", "测试"].includes(String(entry.key).toLowerCase())
+    )
     .map((entry) => ({ key: entry.key, terms: aliasEntryTerms(entry) }))
     .filter((entry) => entry.terms.length > 0);
   if (groups.length === 0) return 0;
