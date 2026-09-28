@@ -29,8 +29,8 @@ test("index status detects working-tree and runtime staleness", async () => {
 
     await fs.mkdir(path.join(root, "src"), { recursive: true });
     await fs.writeFile(
-      path.join(root, "src", "app.js"),
-      "export function app() { return 'v1'; }\n"
+      path.join(root, "src", "app.txt"),
+      "app version v1\n"
     );
     await fs.writeFile(
       path.join(root, "package.json"),
@@ -55,13 +55,13 @@ test("index status detects working-tree and runtime staleness", async () => {
     );
 
     await fs.writeFile(
-      path.join(root, "src", "app.js"),
-      "export function app() { return 'v2'; }\n"
+      path.join(root, "src", "app.txt"),
+      "app version v2\n"
     );
     const changed = await readIndexStatus({ repoRoot: root, indexDir });
     assert.equal(changed.stale, true, JSON.stringify(changed));
     assert.equal(changed.freshness.reasons.changed_files, 1, JSON.stringify(changed));
-    assert.deepEqual(changed.freshness.samples.changed_files, ["src/app.js"]);
+    assert.deepEqual(changed.freshness.samples.changed_files, ["src/app.txt"]);
 
     await indexRepository({ repoRoot: root, indexDir });
     const refreshed = await readIndexStatus({ repoRoot: root, indexDir });
@@ -69,30 +69,30 @@ test("index status detects working-tree and runtime staleness", async () => {
 
     await fs.mkdir(path.join(root, "test"), { recursive: true });
     await fs.writeFile(
-      path.join(root, "test", "new.test.mjs"),
-      "export const workingTreeProbe = true;\n"
+      path.join(root, "test", "new.txt"),
+      "working tree probe\n"
     );
     const added = await readIndexStatus({ repoRoot: root, indexDir });
     assert.equal(added.stale, true, JSON.stringify(added));
     assert.equal(added.freshness.reasons.added_files, 1, JSON.stringify(added));
-    assert.deepEqual(added.freshness.samples.added_files, ["test/new.test.mjs"]);
+    assert.deepEqual(added.freshness.samples.added_files, ["test/new.txt"]);
 
     await indexRepository({ repoRoot: root, indexDir });
     const afterAddedIndex = await readIndexStatus({ repoRoot: root, indexDir });
     assert.equal(afterAddedIndex.stale, false, JSON.stringify(afterAddedIndex));
 
-    await fs.rm(path.join(root, "test", "new.test.mjs"));
+    await fs.rm(path.join(root, "test", "new.txt"));
     const removed = await readIndexStatus({ repoRoot: root, indexDir });
     assert.equal(removed.stale, true, JSON.stringify(removed));
     assert.equal(removed.freshness.reasons.removed_files, 1, JSON.stringify(removed));
-    assert.deepEqual(removed.freshness.samples.removed_files, ["test/new.test.mjs"]);
+    assert.deepEqual(removed.freshness.samples.removed_files, ["test/new.txt"]);
 
     await indexRepository({ repoRoot: root, indexDir });
     const afterRemovedIndex = await readIndexStatus({ repoRoot: root, indexDir });
     assert.equal(afterRemovedIndex.stale, false, JSON.stringify(afterRemovedIndex));
 
-    await fs.writeFile(path.join(root, ".gitignore"), "src/ignored.js\n");
-    await fs.writeFile(path.join(root, "src", "ignored.js"), "export const ignored = true;\n");
+    await fs.writeFile(path.join(root, ".gitignore"), "src/ignored.txt\n");
+    await fs.writeFile(path.join(root, "src", "ignored.txt"), "ignored source\n");
     const ignored = await readIndexStatus({ repoRoot: root, indexDir });
     assert.equal(ignored.stale, false, JSON.stringify(ignored));
 
