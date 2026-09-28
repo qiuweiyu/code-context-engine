@@ -22,6 +22,7 @@
     "status": "node src/cli.js status",
     "benchmark:semantic": "node benchmarks/semantic-run.mjs",
     "benchmark:semantic:gate": "node benchmarks/semantic-gate.mjs",
+    "acceptance:codex": "node scripts/codex-acceptance.mjs",
     "release:smoke": "node scripts/release-smoke.mjs"
   },
   "dependencies": {
