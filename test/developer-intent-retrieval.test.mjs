@@ -40,6 +40,13 @@ async function createFixture() {
   await write(root, "src/semantic/provider-v1.js", "export function runSemanticProviderV1() { return 'semantic provider'; }\n");
   await write(root, "src/semantic/rerank-v1.js", "export function rerankSemanticCandidatesV1() { return 'semantic provider'; }\n");
   await write(root, "src/context/retriever.js", "export function queryContextWithSemantic() { return 'semantic provider'; }\n");
+  await write(root, "src/context/client-requests.js", [
+    "export function normalizeClientPath() { return 'semantic provider cli'; }",
+    "export function extractClientRoutes() { return normalizeClientPath(); }"
+  ].join("\n") + "\n");
+  await write(root, "benchmarks/fixtures/cmd/worker.js", [
+    "export function main() { return 'semantic provider command'; }"
+  ].join("\n") + "\n");
 
   for (let i = 0; i < 10; i++) {
     await write(
@@ -89,6 +96,11 @@ test("developer intent reserves CLI and MCP entry surfaces for the real semantic
     assert.ok(mustRead.includes("src/server.js"), JSON.stringify(result.must_read));
     assert.ok(result.selection.intent_reserved_files.includes("src/cli.js"));
     assert.ok(result.selection.intent_reserved_files.includes("src/server.js"));
+    assert.ok(!result.selection.intent_reserved_files.includes("src/context/client-requests.js"));
+    assert.ok(
+      result.selection.intent_reserved_files.indexOf("src/cli.js")
+        < result.selection.intent_reserved_files.indexOf("benchmarks/fixtures/cmd/worker.js")
+    );
 
     const developerAliases = result.query_expansion.applied_aliases
       .filter((entry) => entry.source === "developer")
