@@ -21,7 +21,7 @@ async function git(root, ...args) {
 
 test("index status detects working-tree and runtime staleness", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "cce-status-"));
-  const indexDir = path.join(root, ".cce-test-index");
+  const indexDir = await fs.mkdtemp(path.join(os.tmpdir(), "cce-status-index-"));
   try {
     await git(root, "init");
     await git(root, "config", "user.email", "cce@example.invalid");
@@ -117,5 +117,6 @@ test("index status detects working-tree and runtime staleness", async () => {
     assert.equal(finalFresh.stale, false, JSON.stringify(finalFresh));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(indexDir, { recursive: true, force: true });
   }
 });
