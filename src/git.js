@@ -33,8 +33,18 @@ function isLikelySource(relPath) {
 }
 
 export async function listTrackedSourceFiles(repoRoot) {
-  const raw = await git(repoRoot, ["ls-files", "-z"], { maxBuffer: 32 * 1024 * 1024 });
-  return raw.split("\0").filter(Boolean).filter(isLikelySource);
+  const raw = await git(
+    repoRoot,
+    ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+    { maxBuffer: 32 * 1024 * 1024 }
+  );
+  return [...new Set(
+    raw
+      .split("\0")
+      .filter(Boolean)
+      .map((relPath) => relPath.replaceAll("\\", "/"))
+      .filter(isLikelySource)
+  )].sort((a, b) => a.localeCompare(b));
 }
 
 export async function listChangedFiles(repoRoot) {
