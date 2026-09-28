@@ -47,7 +47,7 @@ async function verifyPackSurface() {
     "docs/SEMANTIC-PROVIDER.md", "docs/KNOWN-LIMITATIONS.md",
     "docs/RELEASE-NOTES-v0.2.0.md", "docs/RELEASE-NOTES-v0.3.0.md",
     "CHANGELOG.md", "src/observability/api.js", "src/observability/ui/index.html",
-    "scripts/release-smoke.mjs"
+    "scripts/release-smoke.mjs", "scripts/agent-experiment-report.mjs"
   ];
   const missing = required.filter((entry) => !files.includes(entry));
   if (missing.length) throw new Error("required package files missing: " + missing.join(", "));
