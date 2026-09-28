@@ -258,8 +258,36 @@ export function openTelemetryStore({
       createTelemetryEvent(JSON.parse(event_json)));
     return { ...request, runtime: JSON.parse(runtime_json), events };
   };
+  const getMetrics = ({ since } = {}) => {
+    active();
+    if (!(since instanceof Date) || Number.isNaN(since.getTime())) {
+      throw new TypeError("since must be a valid Date");
+    }
+    const windowStart = since.toISOString();
+    const allTime = db.prepare(
+      "SELECT COUNT(*) AS requests FROM requests"
+    ).get().requests;
+    const window = db.prepare(`
+      SELECT COUNT(*) AS requests,
+        SUM(CASE WHEN operation='query' THEN 1 ELSE 0 END) AS queries,
+        SUM(CASE WHEN status='failure' THEN 1 ELSE 0 END) AS failures,
+        AVG(CASE WHEN operation='query' AND status='success'
+          THEN duration_ms END) AS average_query_duration_ms,
+        MAX(timestamp) AS last_request_at
+      FROM requests WHERE timestamp >= ?
+    `).get(windowStart);
+    return {
+      window_since: windowStart,
+      requests_all_time: allTime,
+      requests: window.requests,
+      queries: window.queries ?? 0,
+      failures: window.failures ?? 0,
+      average_query_duration_ms: window.average_query_duration_ms,
+      last_request_at: window.last_request_at
+    };
+  };
   return {
-    dbPath, appendEvent, listRequests, getRequest, prune,
+    dbPath, appendEvent, listRequests, getRequest, getMetrics, prune,
     close() { if (!closed) { db.close(); closed = true; } }
   };
 }
