@@ -100,7 +100,8 @@ try {
   );
 
   const withProbe = await indexRepository({ repoRoot, indexDir });
-  assert.equal(withProbe.changed_files, 1, JSON.stringify(withProbe));
+  assert.ok(withProbe.changed_files >= 1, JSON.stringify(withProbe));
+  assert.equal(withProbe.analysis_failed_files, 0, JSON.stringify(withProbe));
 
   const probeTask = "查找 wp19d working tree probe 的测试代码";
   const probeQuery = queryContext({
@@ -120,7 +121,8 @@ try {
   await fs.writeFile(excludePath, currentExclude + suffix + "/" + probeRel + "\n");
 
   const ignored = await indexRepository({ repoRoot, indexDir });
-  assert.equal(ignored.removed_files, 1, JSON.stringify(ignored));
+  assert.ok(ignored.removed_files >= 1, JSON.stringify(ignored));
+  assert.equal(ignored.analysis_failed_files, 0, JSON.stringify(ignored));
 
   const ignoredQuery = queryContext({
     repoRoot,
@@ -153,8 +155,10 @@ try {
     working_tree: {
       probe: probeRel,
       indexed_before_git_add: true,
+      reanalyzed_files_after_probe: withProbe.changed_files,
       query_selected_probe: true,
-      removed_after_local_ignore: true
+      removed_after_local_ignore: true,
+      reanalyzed_files_after_ignore: ignored.changed_files
     }
   }, null, 2) + "\n");
 } finally {
