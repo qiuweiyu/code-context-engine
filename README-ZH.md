@@ -310,7 +310,7 @@ code-context-engine-mcp
 
 ## 本地可观测性界面（预览）
 
-运行 `npm run start:observability`，在同一台机器打开 `http://127.0.0.1:8765/`。页面可查看运行状态、已保存的请求记录、收益口径和本地设置。MCP / CLI 请求采集尚未接入，因此空记录是正常状态。详见 [docs/observability-ui-v1.md](docs/observability-ui-v1.md)。
+运行 `npm run start:observability`，在同一台机器打开 `http://127.0.0.1:8765/`。页面可查看运行状态、已保存的请求记录、收益口径和本地设置。MCP / CLI 的索引、状态和查询会记录到本地，不保存原始问题或源码。记录为空表示尚无保留的调用；已有记录也不代表客户端此刻在线。详见 [docs/observability-ui-v1.md](docs/observability-ui-v1.md)。
 
 ## 查询结果
 

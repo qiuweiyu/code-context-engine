@@ -31,5 +31,8 @@ The UI uses same-origin assets, a restrictive Content Security Policy,
 no-store responses, and no external fonts or scripts. Narrow screens expose
 all four navigation items without sideways scrolling.
 
-WP20-D is a read-only shell. No MCP/CLI event capture is active yet. WP20-E
-connects real tool calls; WP20-F provides genuine byte/token effect data.
+WP20-D is a read-only shell. WP20-E records real MCP/CLI index/status/query
+operations in the per-user store. Stored requests prove historical activity,
+not that an MCP client is connected right now. The privacy contract does not
+retain raw task text or file paths. WP20-F adds aggregated effect metrics and
+token estimates; current bytes in a query trace are measured serialized output.

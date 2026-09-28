@@ -262,7 +262,7 @@ code-context-engine-mcp
 
 ## Local observability UI (preview)
 
-Run `npm run start:observability` and open `http://127.0.0.1:8765/` on the same machine. The UI shows runtime status, saved request traces, effects provenance, and local settings. MCP/CLI capture is not active yet, so an empty history is expected. See [docs/observability-ui-v1.md](docs/observability-ui-v1.md).
+Run `npm run start:observability` and open `http://127.0.0.1:8765/` on the same machine. The UI shows runtime status, saved request traces, effects provenance, and local settings. Real MCP/CLI index, status and query calls are recorded locally without saving raw task text or source. Empty history means no retained calls have been observed; recorded history does not prove a client is online. See [docs/observability-ui-v1.md](docs/observability-ui-v1.md).
 
 ## Query result
 
