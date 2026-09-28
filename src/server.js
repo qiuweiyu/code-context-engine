@@ -9,8 +9,9 @@ import { readIndexStatus } from "./context/status.js";
 import { buildRepositoryFlowManifest } from "./context/flow-manifest.js";
 import { serializeQueryOutput } from "./context/query-output.js";
 import { loadMcpSemanticProviderSpecV1 } from "./semantic/spec-path.js";
+import { packageVersion } from "./runtime.js";
 
-const server = new McpServer({ name: "code-context-engine", version: "0.1.7" });
+const server = new McpServer({ name: "code-context-engine", version: packageVersion });
 const textResult = (value) => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
 const queryTextResult = (value, compact = false) => ({
   content: [{ type: "text", text: serializeQueryOutput(value, { compact }) }]
@@ -140,13 +141,13 @@ server.registerTool(
   "context_index_status",
   {
     title: "Inspect code context freshness",
-    description: "Shows index counts plus each feature flow's valid / needs_review / stale status.",
+    description: "Shows real working-tree freshness, runtime/index provenance, counts, and feature flow status.",
     inputSchema: { repo_root: z.string().min(1) }
   },
   async ({ repo_root }) => {
     try {
       const allowed = assertAllowedPath(repo_root);
-      return textResult(readIndexStatus({ repoRoot: allowed }));
+      return textResult(await readIndexStatus({ repoRoot: allowed }));
     } catch (error) {
       return textResult({ ok: false, error: error instanceof Error ? error.message : "unknown error" });
     }
