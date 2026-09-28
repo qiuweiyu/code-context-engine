@@ -21,6 +21,14 @@ export async function resolveGitRoot(repoRoot) {
   return (await git(repoRoot, ["rev-parse", "--show-toplevel"])).trim();
 }
 
+export async function readGitHead(repoRoot) {
+  try {
+    return (await git(repoRoot, ["rev-parse", "HEAD"])).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 function isLikelySource(relPath) {
   if (isBlockedFile(relPath)) return false;
   const normalized = relPath.replaceAll("\\", "/");
