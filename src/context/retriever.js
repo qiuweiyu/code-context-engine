@@ -54,6 +54,90 @@ function textScore(text, terms, weight = 1) {
   return score;
 }
 
+const MANIFEST_BASENAMES = new Map([
+  ["package.json", 20],
+  ["pyproject.toml", 18],
+  ["cargo.toml", 18],
+  ["pom.xml", 18],
+  ["build.gradle", 18],
+  ["build.gradle.kts", 18],
+  ["go.mod", 18],
+  ["go.work", 16],
+  ["composer.json", 16],
+  ["gemfile", 16],
+  ["mix.exs", 16],
+  ["pubspec.yaml", 16],
+  ["deno.json", 16],
+  ["deno.jsonc", 16],
+  ["tsconfig.json", 14],
+  ["jsconfig.json", 14]
+]);
+
+const TEST_INTENT_TERMS = new Set([
+  "test", "tests", "spec", "acceptance", "测试", "验收", "回归"
+]);
+
+function surfaceIntents(task, expansion) {
+  const text = String(task ?? "").toLowerCase();
+  const developerKeys = new Set(
+    (expansion.applied_aliases ?? [])
+      .filter((entry) => entry.source === "developer")
+      .map((entry) => String(entry.key).toLowerCase())
+  );
+  return {
+    manifest: developerKeys.has("version")
+      || developerKeys.has("版本")
+      || developerKeys.has("config")
+      || developerKeys.has("配置")
+      || /\b(package|packages|dependency|dependencies|build|manifest)\b/.test(text)
+      || /依赖|构建|清单/.test(text),
+    test: developerKeys.has("test")
+      || developerKeys.has("测试")
+      || /\b(tests?|specs?|regression)\b/.test(text)
+      || /测试|验收|回归/.test(text)
+  };
+}
+
+function isManifestSurface(relPath) {
+  const normalized = String(relPath ?? "").replaceAll("\\", "/").toLowerCase();
+  const base = path.posix.basename(normalized);
+  if (MANIFEST_BASENAMES.has(base)) return MANIFEST_BASENAMES.get(base);
+  if (/^(vite|webpack|rollup|eslint|prettier|babel|jest|vitest)\.config\.[^.]+$/.test(base)) {
+    return 14;
+  }
+  return 0;
+}
+
+function readIndexedPreview(repoRoot, relPath, maxBytes = 24 * 1024) {
+  const full = path.resolve(repoRoot, relPath);
+  const root = path.resolve(repoRoot) + path.sep;
+  if (!full.startsWith(root)) return "";
+  try {
+    const stat = fs.lstatSync(full);
+    if (stat.isSymbolicLink() || !stat.isFile()) return "";
+    const fd = fs.openSync(full, "r");
+    try {
+      const buffer = Buffer.alloc(maxBytes);
+      const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, 0);
+      const bytes = buffer.subarray(0, bytesRead);
+      if (bytes.includes(0)) return "";
+      return bytes.toString("utf8");
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return "";
+  }
+}
+
+function surfaceFocusTerms(terms) {
+  return terms.filter((term) =>
+    term.length >= 2
+    && !TEST_INTENT_TERMS.has(term)
+    && !["file", "code", "task", "project", "自动化"].includes(term)
+  );
+}
+
 function addFile(map, file, score, reason, symbol = null, channel = "misc") {
   if (!file) return;
   const current = map.get(file) ?? {
@@ -312,6 +396,40 @@ function applyDeveloperIntentSurfaceBoost(files, fileRows, expansion) {
   return boosted.size;
 }
 
+function applyManifestSurface(files, fileRows, task, expansion) {
+  const intents = surfaceIntents(task, expansion);
+  if (!intents.manifest) return 0;
+  const terms = surfaceFocusTerms(expansion.terms ?? []);
+  let matched = 0;
+  for (const row of fileRows) {
+    const baseScore = isManifestSurface(row.path);
+    if (baseScore <= 0) continue;
+    const score = baseScore + Math.min(6, textScore(row.path, terms, 2));
+    addFile(files, row.path, score, "manifest_surface", null, "manifest");
+    matched++;
+  }
+  return matched;
+}
+
+function applyDirectTestSurface(files, testRows, repoRoot, task, expansion) {
+  const intents = surfaceIntents(task, expansion);
+  if (!intents.test) return 0;
+  const terms = surfaceFocusTerms(expansion.terms ?? []);
+  if (terms.length === 0) return 0;
+
+  let matched = 0;
+  for (const row of testRows) {
+    const pathScore = textScore(row.path, terms, 5);
+    const preview = readIndexedPreview(repoRoot, row.path);
+    const previewScore = textScore(preview, terms, 2);
+    const score = Math.min(24, pathScore + previewScore);
+    if (score <= 0) continue;
+    addFile(files, row.path, score, "direct_test_match", null, "direct_test");
+    matched++;
+  }
+  return matched;
+}
+
 function aliasEntryTerms(entry) {
   const out = new Set();
   for (const alias of entry?.aliases ?? []) {
@@ -345,6 +463,8 @@ function selectWithIntentReservations(rankedFiles, maxFiles, expansion) {
   const reservedPaths = [];
   const reservedSet = new Set();
   const developerReservedSet = new Set();
+  const manifestReservedSet = new Set();
+  const testReservedSet = new Set();
 
   for (const group of intentGroups) {
     if (reservedPaths.length >= reservationBudget) break;
@@ -361,6 +481,23 @@ function selectWithIntentReservations(rankedFiles, maxFiles, expansion) {
       reservedPaths.push(entry.path);
       if (group.source === "developer") developerReservedSet.add(entry.path);
       if (reservedPaths.length >= reservationBudget) break;
+    }
+  }
+
+  for (const [reason, targetSet, perReasonLimit] of [
+    ["manifest_surface", manifestReservedSet, 1],
+    ["direct_test_match", testReservedSet, 2]
+  ]) {
+    if (reservedPaths.length >= reservationBudget) break;
+    const matches = rankedFiles.filter((entry) => entry.reasons.includes(reason));
+    let added = 0;
+    for (const entry of matches) {
+      if (reservedSet.has(entry.path)) continue;
+      reservedSet.add(entry.path);
+      reservedPaths.push(entry.path);
+      targetSet.add(entry.path);
+      added++;
+      if (added >= perReasonLimit || reservedPaths.length >= reservationBudget) break;
     }
   }
 
@@ -389,7 +526,9 @@ function selectWithIntentReservations(rankedFiles, maxFiles, expansion) {
   return {
     selected,
     reserved_files: selectedReservedPaths,
-    developer_reserved_files: selectedReservedPaths.filter((path) => developerReservedSet.has(path))
+    developer_reserved_files: selectedReservedPaths.filter((path) => developerReservedSet.has(path)),
+    manifest_reserved_files: selectedReservedPaths.filter((path) => manifestReservedSet.has(path)),
+    test_reserved_files: selectedReservedPaths.filter((path) => testReservedSet.has(path))
   };
 }
 
@@ -498,6 +637,7 @@ function buildQueryContextState({ repoRoot, task, indexDir = ".context-index", m
     }
 
     const fileRows = db.prepare("SELECT path,is_test FROM files WHERE is_test=0").all();
+    const testRows = db.prepare("SELECT path,is_test FROM files WHERE is_test=1").all();
     for (const fileRow of fileRows) {
       const projectScore = textScore(fileRow.path, projectTerms, 18);
       const genericScore = projectTerms.length === 0 ? textScore(fileRow.path, terms, 2) : 0;
@@ -505,6 +645,8 @@ function buildQueryContextState({ repoRoot, task, indexDir = ".context-index", m
       if (score > 0) addFile(files, fileRow.path, score, "path_match", null, "path");
     }
     applyDeveloperIntentSurfaceBoost(files, fileRows, expansion);
+    const manifestSurfaceFiles = applyManifestSurface(files, fileRows, task, expansion);
+    const directTestFiles = applyDirectTestSurface(files, testRows, repoRoot, task, expansion);
 
     const seedSymbols = new Set([...files.values()].flatMap((x)=>[...x.symbols]));
     const nonTestFiles = new Set(
@@ -578,6 +720,8 @@ function buildQueryContextState({ repoRoot, task, indexDir = ".context-index", m
       graphExpansion,
       importExpansion,
       intentBoostedFiles,
+      manifestSurfaceFiles,
+      directTestFiles,
       rankedFiles,
       fileIsTest
     };
@@ -599,6 +743,8 @@ function finalizeQueryContext(state, rankedFiles, semanticRefinement = null) {
     graphExpansion,
     importExpansion,
     intentBoostedFiles,
+    manifestSurfaceFiles,
+    directTestFiles,
     fileIsTest
   } = state;
 
@@ -617,11 +763,17 @@ function finalizeQueryContext(state, rankedFiles, semanticRefinement = null) {
   const implementation = selected.filter((x) => !fileIsTest[x.path]);
   const selectedTests = selected.filter((x) => fileIsTest[x.path]);
   const developerReservedSet = new Set(selection.developer_reserved_files);
+  const manifestReservedSet = new Set(selection.manifest_reserved_files);
   const prioritizedImplementation = [
     ...selection.developer_reserved_files
       .map((reservedPath) => implementation.find((entry) => entry.path === reservedPath))
       .filter(Boolean),
-    ...implementation.filter((entry) => !developerReservedSet.has(entry.path))
+    ...selection.manifest_reserved_files
+      .map((reservedPath) => implementation.find((entry) => entry.path === reservedPath))
+      .filter(Boolean),
+    ...implementation.filter((entry) =>
+      !developerReservedSet.has(entry.path) && !manifestReservedSet.has(entry.path)
+    )
   ];
   const mustRead = prioritizedImplementation.slice(0, Math.min(8, prioritizedImplementation.length));
   const maybeRead = prioritizedImplementation.slice(mustRead.length);
@@ -673,10 +825,14 @@ function finalizeQueryContext(state, rankedFiles, semanticRefinement = null) {
       reverse_steps: graphExpansion.reverse_steps,
       import_reverse_steps: importExpansion.steps,
       import_seed_files: importExpansion.seed_files,
-      intent_boosted_files: intentBoostedFiles
+      intent_boosted_files: intentBoostedFiles,
+      manifest_surface_files: manifestSurfaceFiles,
+      direct_test_files: directTestFiles
     },
     selection: {
-      intent_reserved_files: selection.reserved_files
+      intent_reserved_files: selection.reserved_files,
+      manifest_reserved_files: selection.manifest_reserved_files,
+      test_reserved_files: selection.test_reserved_files
     },
     features: relevantFeatures,
     must_read: mustRead.map((x) => ({
