@@ -321,7 +321,7 @@ code-context-engine-mcp
 
 ## 本地可观测性界面（预览）
 
-运行 `npm run start:observability`，在同一台机器打开 `http://127.0.0.1:8765/`。页面可查看运行状态、已保存的请求记录、收益口径和本地设置。MCP / CLI 的索引、状态和查询会记录到本地，不保存原始问题或源码。记录为空表示尚无保留的调用；已有记录也不代表客户端此刻在线。收益页区分真实测量的 CCE 输出字节与确定性 Token 估算，不宣称真实 Agent 收益。详见 [界面说明](docs/observability-ui-v1.md) 与 [计量方法](docs/observability-effects-v1.md)。
+运行 `npm run start:observability`，在同一台机器打开 `http://127.0.0.1:8765/`。页面可查看运行状态、已保存的请求记录、收益口径和本地设置。MCP / CLI 的索引、状态和查询会记录到本地，不保存原始问题或源码。记录为空表示尚无保留的调用；已有记录也不代表客户端此刻在线。收益页区分真实测量的 CCE 输出字节与确定性 Token 估算，不宣称真实 Agent 收益。详见 [界面说明](docs/observability-ui-v1.md) 与 [计量方法](docs/observability-effects-v1.md)。 [WP20-G 对照实验方案](docs/observability-agent-experiment-v1.md) 尚无真实成对 Agent 运行记录。
 
 ## 查询结果
 
