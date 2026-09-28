@@ -36,6 +36,7 @@ function usage() {
 }
 
 const cmd = process.argv[2];
+if (cmd === "--version") { process.stdout.write(packageVersion + "\n"); process.exit(0); }
 if (!cmd || ["-h","--help","help"].includes(cmd)) { usage(); process.exit(0); }
 const repo = path.resolve(arg("--repo", process.cwd()));
 
