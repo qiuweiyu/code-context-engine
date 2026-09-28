@@ -54,6 +54,20 @@ async function createFixture() {
     version: "0.2.0",
     type: "module"
   }, null, 2) + "\n");
+  await write(root, "test/flow-surface.test.mjs", [
+    "import test from 'node:test';",
+    "test('CLI version uses src/cli.js --version', () => {",
+    "  const command = 'node src/cli.js --version';",
+    "  if (!command.includes('cli.js')) throw new Error('missing cli');",
+    "});"
+  ].join("\n") + "\n");
+  await write(root, "test/provider-only.test.mjs", [
+    "import test from 'node:test';",
+    "test('semantic provider implementation', () => {",
+    "  const subject = 'semantic provider';",
+    "  if (!subject) throw new Error('missing subject');",
+    "});"
+  ].join("\n") + "\n");
 
   await git(root, "add", ".");
   await git(root, "commit", "-qm", "fixture");
@@ -86,20 +100,46 @@ test("developer intent reserves CLI and MCP entry surfaces for the real semantic
   }
 });
 
-test("CLI version development intent promotes src/cli.js into must_read under a tight bound", async () => {
+test("CLI version task retrieves CLI, manifest and relevant test surfaces together", async () => {
   const root = await createFixture();
   try {
     const result = queryContext({
       repoRoot: root,
       task: "为 CCE CLI 增加 --version 参数，并增加对应自动化测试",
-      maxFiles: 4
+      maxFiles: 6
     });
 
     assert.ok(
       result.must_read.some((entry) => entry.path === "src/cli.js"),
       JSON.stringify({ must_read: result.must_read, maybe_read: result.maybe_read })
     );
+    assert.ok(
+      result.must_read.some((entry) => entry.path === "package.json"),
+      JSON.stringify({ must_read: result.must_read, maybe_read: result.maybe_read })
+    );
+    assert.ok(result.tests.includes("test/flow-surface.test.mjs"), JSON.stringify(result.tests));
+    assert.ok(!result.tests.includes("test/provider-only.test.mjs"), JSON.stringify(result.tests));
     assert.ok(result.selection.intent_reserved_files.includes("src/cli.js"));
+    assert.deepEqual(result.selection.manifest_reserved_files, ["package.json"]);
+    assert.deepEqual(result.selection.test_reserved_files, ["test/flow-surface.test.mjs"]);
+    assert.ok(result.graph_expansion.manifest_surface_files >= 1);
+    assert.ok(result.graph_expansion.direct_test_files >= 1);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("test surface channel stays disabled when the query does not request tests", async () => {
+  const root = await createFixture();
+  try {
+    const result = queryContext({
+      repoRoot: root,
+      task: "查找 Semantic Provider 的 CLI 和 MCP 接入代码",
+      maxFiles: 6
+    });
+
+    assert.equal(result.graph_expansion.direct_test_files, 0);
+    assert.deepEqual(result.selection.test_reserved_files, []);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
