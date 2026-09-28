@@ -57,40 +57,53 @@ export async function readIndexStatus({
     const changed = [];
     const parserChanged = [];
     const unreadable = [];
+    let addedCount = 0;
+    let removedCount = 0;
+    let changedCount = 0;
+    let parserChangedCount = 0;
+    let unreadableCount = 0;
 
     for (const relPath of currentPaths) {
       let text;
       try {
         text = await readLocalSource(gitRoot, relPath);
       } catch {
+        unreadableCount++;
         samplePush(unreadable, relPath);
         continue;
       }
       if (text === null) {
+        unreadableCount++;
         samplePush(unreadable, relPath);
         continue;
       }
 
       const indexed = indexedMap.get(relPath);
       if (!indexed) {
+        addedCount++;
         samplePush(added, relPath);
         continue;
       }
 
       const contentHash = sha256Text(text);
       if (indexed.content_hash !== contentHash) {
+        changedCount++;
         samplePush(changed, relPath);
       }
 
       const language = detectLanguage(relPath);
       const currentParser = parserVersionFor(language, analyzerRegistry);
       if (indexed.parser_version !== currentParser) {
+        parserChangedCount++;
         samplePush(parserChanged, relPath);
       }
     }
 
     for (const row of indexedRows) {
-      if (!currentSet.has(row.path)) samplePush(removed, row.path);
+      if (!currentSet.has(row.path)) {
+        removedCount++;
+        samplePush(removed, row.path);
+      }
     }
 
     const runtime = runtimeIdentity();
@@ -102,11 +115,11 @@ export async function readIndexStatus({
     const repositoryHead = await readGitHead(gitRoot);
     const indexedRepositoryHead = meta(db, "repository_head");
     const staleReasons = {
-      added_files: added.length,
-      removed_files: removed.length,
-      changed_files: changed.length,
-      parser_changed_files: parserChanged.length,
-      unreadable_files: unreadable.length,
+      added_files: addedCount,
+      removed_files: removedCount,
+      changed_files: changedCount,
+      parser_changed_files: parserChangedCount,
+      unreadable_files: unreadableCount,
       runtime_fingerprint_mismatch: runtimeFingerprintMatch ? 0 : 1
     };
     const stale = Object.values(staleReasons).some((value) => value > 0);
