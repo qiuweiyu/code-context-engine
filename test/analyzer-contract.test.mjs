@@ -92,7 +92,7 @@ test("Go parse failure preserves old symbols and retries after source repair", a
     assert.equal(failed.analysis_failed_files, 1);
     assert.equal(failed.diagnostics[0].code, "parse_failed");
     assert.deepEqual(symbols(root), before);
-    assert.equal(readIndexStatus({ repoRoot: root }).analysis_diagnostics[0].code, "parse_failed");
+    assert.equal((await readIndexStatus({ repoRoot: root })).analysis_diagnostics[0].code, "parse_failed");
     const query = queryContext({ repoRoot: root, task: "Alpha" });
     assert.equal(query.coverage.status, "review_required");
     assert.equal(projectQueryOutput(query, { compact: true }).analysis_failed_files, 1);
@@ -100,7 +100,7 @@ test("Go parse failure preserves old symbols and retries after source repair", a
     const repaired = await indexRepository({ repoRoot: root });
     assert.equal(repaired.changed_files, 1);
     assert.equal(repaired.analysis_failed_files, 0);
-    assert.equal(readIndexStatus({ repoRoot: root }).analysis_diagnostics, undefined);
+    assert.equal((await readIndexStatus({ repoRoot: root })).analysis_diagnostics, undefined);
     assert.ok(symbols(root).includes("go:service.go::Repaired"));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
