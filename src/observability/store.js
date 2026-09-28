@@ -288,6 +288,7 @@ export function openTelemetryStore({
   };
   return {
     dbPath, appendEvent, listRequests, getRequest, getMetrics, prune,
+    getSettings() { return { retention_days: retentionDays, max_requests: maxRequests }; },
     close() { if (!closed) { db.close(); closed = true; } }
   };
 }

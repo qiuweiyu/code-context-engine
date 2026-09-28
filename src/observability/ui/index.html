@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>CCE · 本地观测台</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span><strong>CCE</strong><small>LOCAL CONSOLE</small></span>
+      </div>
+      <p class="nav-heading">WORKSPACE</p>
+      <nav class="nav" aria-label="页面">
+        <button type="button" class="nav-item active" data-nav="overview" aria-current="page"><span class="nav-icon">◫</span><span>概览</span></button>
+        <button type="button" class="nav-item" data-nav="requests"><span class="nav-icon">≡</span><span>请求记录</span></button>
+        <button type="button" class="nav-item" data-nav="effects"><span class="nav-icon">◧</span><span>收益计量</span></button>
+        <button type="button" class="nav-item" data-nav="settings"><span class="nav-icon">⚙</span><span>设置与隐私</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="local-dot"></div>
+        <div><strong>LOCAL ONLY</strong><span>仅在当前设备运行</span></div>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="breadcrumb"><span>CCE</span><span class="slash">/</span><strong id="breadcrumb-page">概览</strong></div>
+        <div class="top-actions">
+          <span class="connection" id="connection-badge"><i></i><span id="connection-label">连接中</span></span>
+          <button type="button" class="icon-button" id="refresh-button" aria-label="刷新当前页面" title="刷新">↻</button>
+        </div>
+      </header>
+
+      <main class="main" id="main">
+        <section class="view" data-view="overview" aria-labelledby="overview-title">
+          <div class="page-heading">
+            <div><span class="eyebrow">OVERVIEW <span class="line"></span> LOCAL RUNTIME</span><h1 id="overview-title">本地运行概览</h1><p>运行状态、索引信息和最近的请求，集中查看。</p></div>
+            <span class="asof" id="updated-at">等待首次读取</span>
+          </div>
+          <div class="notice" id="capture-notice">
+            <span class="notice-icon">i</span>
+            <div><strong>请求采集尚未启用</strong><p>目前可以查看本地 API 与存储。MCP / CLI 请求接入将在 WP20-E 完成，此处不会生成模拟记录。</p></div>
+          </div>
+          <div class="status-grid">
+            <article class="panel status-panel">
+              <div class="panel-top"><span class="eyebrow">RUNTIME</span><span class="chip chip-neutral" id="runtime-chip">检测中</span></div>
+              <h2>本地 API</h2>
+              <div class="status-value"><span class="pulse" id="runtime-dot"></span><strong id="runtime-state">检测中</strong></div>
+              <p class="panel-note">这里表示观测 API 的连接状态，不代表 MCP 客户端正在调用。</p>
+              <div class="hairline"></div>
+              <div class="kv"><span>运行版本</span><strong id="runtime-version">—</strong></div>
+              <div class="kv"><span>Runtime Git HEAD</span><code id="runtime-head">—</code></div>
+              <div class="kv"><span>已识别客户端</span><strong id="client-identity">不可用</strong></div>
+            </article>
+            <article class="panel index-panel">
+              <div class="panel-top"><span class="eyebrow">REPOSITORY & INDEX</span><span class="chip chip-muted">按需检查</span></div>
+              <h2>索引状态</h2>
+              <div class="status-value status-quiet"><span class="square-icon">▤</span><strong id="index-state">不可用</strong></div>
+              <p class="panel-note">当前状态接口不会自动扫描仓库，避免额外读取与计算。</p>
+              <div class="hairline"></div>
+              <div class="kv"><span>活动仓库</span><strong id="active-repo">未提供</strong></div>
+              <div class="kv"><span>索引新鲜度</span><strong id="index-freshness">不可用</strong></div>
+              <div class="kv"><span>上次索引</span><strong id="last-indexed">不可用</strong></div>
+            </article>
+          </div>
+          <div class="section-heading"><div><span class="eyebrow">LAST 24 HOURS</span><h2>请求概况</h2></div><span class="subtle-tag">来自本地存储</span></div>
+          <div class="metric-grid">
+            <article class="metric-card"><span>请求总数</span><strong id="metric-requests">—</strong><small>最近 24 小时</small></article>
+            <article class="metric-card"><span>代码查询</span><strong id="metric-queries">—</strong><small>最近 24 小时</small></article>
+            <article class="metric-card"><span>平均查询耗时</span><strong id="metric-duration">—</strong><small>仅成功的查询</small></article>
+            <article class="metric-card"><span>失败请求</span><strong id="metric-failures">—</strong><small>最近 24 小时</small></article>
+          </div>
+          <div class="section-heading recent-heading"><div><span class="eyebrow">ACTIVITY</span><h2>最近请求</h2></div><button type="button" class="text-button" data-goto="requests">查看全部 <span>↗</span></button></div>
+          <div class="panel recent-panel" id="recent-content"><div class="empty compact"><span class="empty-illustration">◎</span><strong>等待请求记录</strong><p>采集接入后，真实请求会出现在这里。</p></div></div>
+        </section>
+
+        <section class="view" data-view="requests" aria-labelledby="requests-title" hidden>
+          <div class="page-heading"><div><span class="eyebrow">REQUEST TRACES</span><h1 id="requests-title">请求记录</h1><p>按发生时间查看调用。点开一条记录，检查实际保存的事件。</p></div><span class="subtle-tag" id="request-total">0 条已加载</span></div>
+          <div class="notice notice-soft"><span class="notice-icon">i</span><div><strong>只显示已采集到的事实</strong><p>原始查询文本、Agent 后续读取文件与检索结果路径在当前契约中不可用；详情会明确标注。</p></div></div>
+          <div class="panel table-panel">
+            <div class="table-toolbar"><div><strong>全部请求</strong><span>按时间倒序</span></div><button type="button" class="small-button" id="request-refresh">刷新列表</button></div>
+            <div class="table-scroll"><table><thead><tr><th>时间</th><th>操作</th><th>状态</th><th>耗时</th><th>来源</th><th></th></tr></thead><tbody id="request-rows"></tbody></table></div>
+            <div class="empty" id="requests-empty"><span class="empty-illustration">≡</span><strong>暂无请求记录</strong><p>WP20-E 接入 MCP / CLI 后，真实请求会显示在此处。</p></div>
+            <div class="table-footer"><span id="requests-footnote">尚未采集到请求</span><button type="button" class="small-button" id="load-more" hidden>加载更多</button></div>
+          </div>
+        </section>
+
+        <section class="view" data-view="effects" aria-labelledby="effects-title" hidden>
+          <div class="page-heading"><div><span class="eyebrow">EFFECTS & PROVENANCE</span><h1 id="effects-title">收益计量</h1><p>每一个收益数字，都要能说明它从哪里来。</p></div><span class="chip chip-muted">数据优先</span></div>
+          <div class="notice"><span class="notice-icon">i</span><div><strong>目前没有可报告的 Token 收益</strong><p id="effects-note">计量尚未实现。这里不会把输出字节压缩率写成真实模型 Token 节省。</p></div></div>
+          <div class="section-heading"><div><span class="eyebrow">MEASUREMENT FRAMEWORK</span><h2>三种计量口径</h2></div></div>
+          <div class="effect-grid">
+            <article class="panel effect-card"><span class="number">01 / MEASURED</span><h3>CCE 输出压缩</h3><div class="effect-placeholder">—</div><p>比较同一次查询产生的 Full 与 Compact 输出字节。尚未有记录时不计算比例。</p><span class="chip chip-muted">待采集</span></article>
+            <article class="panel effect-card"><span class="number">02 / ESTIMATED</span><h3>Token 估算</h3><div class="effect-placeholder">—</div><p>使用固定估算方法换算输出大小，并始终注明估算方法。当前尚未实现。</p><span class="chip chip-muted">未实现</span></article>
+            <article class="panel effect-card"><span class="number">03 / EXPERIMENT</span><h3>真实 Agent 对比</h3><div class="effect-placeholder">—</div><p>同任务、同 Agent 对比有无 CCE 时的实际读取与完成情况。当前没有实验数据。</p><span class="chip chip-muted">无实验数据</span></article>
+          </div>
+          <div class="panel definition-panel"><div><span class="eyebrow">READING THE NUMBERS</span><h3>这些标签意味着什么？</h3></div><dl><div><dt>Measured</dt><dd>CCE 自身实际输出的字节数。</dd></div><div><dt>Estimated</dt><dd>由明确方法换算的 Token 估值，非模型账单。</dd></div><div><dt>Controlled Experiment</dt><dd>同条件的 Agent 工作流对照实验。</dd></div></dl></div>
+        </section>
+
+        <section class="view" data-view="settings" aria-labelledby="settings-title" hidden>
+          <div class="page-heading"><div><span class="eyebrow">LOCAL CONFIGURATION</span><h1 id="settings-title">设置与隐私</h1><p>查看当前生效的本地配置。修改入口将在后续版本开放。</p></div><span class="chip chip-muted">只读</span></div>
+          <div class="settings-grid">
+            <article class="panel settings-panel"><span class="eyebrow">SERVICE</span><h2>本地服务</h2><div class="hairline"></div><div class="kv"><span>监听地址</span><code id="setting-address">—</code></div><div class="kv"><span>运行版本</span><strong id="setting-version">—</strong></div><div class="kv"><span>请求采集</span><strong id="setting-capture">不可用</strong></div><div class="kv"><span>原始查询文本</span><strong>不保存</strong></div></article>
+            <article class="panel settings-panel"><span class="eyebrow">RETENTION</span><h2>数据保留</h2><div class="hairline"></div><div class="kv"><span>保留天数</span><strong id="setting-days">—</strong></div><div class="kv"><span>最大请求数</span><strong id="setting-max">—</strong></div><div class="kv"><span>数据位置</span><strong>当前用户目录</strong></div><p class="panel-note">出于隐私考虑，此页面不展示数据库的绝对路径。</p></article>
+          </div>
+          <div class="panel privacy-panel"><div class="privacy-glyph">⌁</div><div><span class="eyebrow">PRIVACY BY DEFAULT</span><h3>代码留在本机</h3><p>不上传源码，不保存环境变量值、密钥或完整源码内容。请求文本与后续文件读取在当前阶段均不可用；界面不会据此推断 Token 收益。</p></div></div>
+        </section>
+      </main>
+      <footer class="footer"><span>CCE Observability</span><span>Local-first · No cloud required</span></footer>
+    </div>
+  </div>
+
+  <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+  <aside class="drawer" id="request-drawer" aria-label="请求详情" aria-modal="true" role="dialog" hidden>
+    <div class="drawer-header"><div><span class="eyebrow">REQUEST TRACE</span><h2>请求详情</h2></div><button type="button" class="icon-button" id="drawer-close" aria-label="关闭详情">×</button></div>
+    <div class="drawer-body" id="drawer-body"></div>
+  </aside>
+</body>
+</html>

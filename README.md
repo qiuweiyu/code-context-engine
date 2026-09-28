@@ -260,6 +260,10 @@ export CCE_ALLOWED_ROOTS=/home/me/projects
 code-context-engine-mcp
 ```
 
+## Local observability UI (preview)
+
+Run `npm run start:observability` and open `http://127.0.0.1:8765/` on the same machine. The UI shows runtime status, saved request traces, effects provenance, and local settings. MCP/CLI capture is not active yet, so an empty history is expected. See [docs/observability-ui-v1.md](docs/observability-ui-v1.md).
+
 ## Query result
 
 A query has two output views. The default Full view keeps retrieval and graph diagnostics for engine inspection. `--compact` (or MCP `compact: true`) projects that same result into an LLM-oriented view containing coverage, selected files, bounded symbol hints, and tests. Compact mode does not run a different retrieval path.

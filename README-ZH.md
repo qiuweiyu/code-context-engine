@@ -308,6 +308,10 @@ code-context-engine-mcp
 
 这样 Codex、ChatGPT、Claude Code 或其他支持 MCP 的工具，可以先查询 CCE，再决定真正需要读取哪些代码文件。
 
+## 本地可观测性界面（预览）
+
+运行 `npm run start:observability`，在同一台机器打开 `http://127.0.0.1:8765/`。页面可查看运行状态、已保存的请求记录、收益口径和本地设置。MCP / CLI 请求采集尚未接入，因此空记录是正常状态。详见 [docs/observability-ui-v1.md](docs/observability-ui-v1.md)。
+
 ## 查询结果
 
 Query 现在有两种输出视图。默认 Full 视图保留 retrieval / graph 诊断，便于人工调试和引擎检查；`--compact`（或 MCP `compact: true`）只对同一份查询结果做 LLM 友好的投影，保留 coverage、待读文件、有限 symbol hints 和 tests。Compact 不会切换到另一套检索逻辑。
