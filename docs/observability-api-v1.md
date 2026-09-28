@@ -7,9 +7,10 @@ The process prints its actual URL and runs until SIGINT/SIGTERM. The API
 refuses any bind host other than the literal `127.0.0.1`.
 
 The server uses Node's built-in HTTP implementation. It opens the per-user
-SQLite telemetry store described in `observability-store-v1.md`; it does not
-instrument or activate collection in the MCP or CLI runtime. Start an empty
-database and you will see zero stored requests. Only GET is accepted.
+SQLite telemetry store described in `observability-store-v1.md`. MCP and CLI
+index/status/query operations record best-effort events in the same per-user
+store. Start an empty database and you will see zero stored requests until a
+tool is actually called. Only GET is accepted.
 Requests with a foreign Host/Origin are rejected; CORS is not enabled.
 Responses use `Cache-Control: no-store` and `nosniff`. This is a local
 developer interface, not a public or authenticated network service.
@@ -17,7 +18,8 @@ developer interface, not a public or authenticated network service.
 ## Endpoints
 
 - `GET /status` returns service state, runtime package version/fingerprint,
-  telemetry schema version, capture state (`inactive` until WP20-E),
+  telemetry schema version, capture state (`inactive` if empty, `observed` if
+  retained requests exist; neither proves a client is currently connected),
   repository `null`, and index freshness `unavailable`. It does not perform
   an expensive repository freshness scan on each page load.
 - `GET /requests?limit=50&cursor=...` returns recent stored request
@@ -34,5 +36,5 @@ developer interface, not a public or authenticated network service.
 
 For example, `curl http://127.0.0.1:8765/status` reads the local state.
 The API is the stable boundary for WP20-D's UI; the UI does not query SQLite
-tables directly. The local homepage at `/` serves the UI shell. WP20-E will connect MCP/CLI request events, including
-best-effort writes that never fail an ordinary code query.
+tables directly. The local homepage at `/` serves the UI shell. Request events
+are best effort: a telemetry failure never fails an ordinary code query.

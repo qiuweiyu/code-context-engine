@@ -13,6 +13,7 @@ import { exportScipIndex } from "./public/scip.js";
 import { locatePublicNode } from "./public/locate.js";
 import { exportGraphHtml } from "./public/graph-html.js";
 import { loadCliSemanticProviderSpecV1 } from "./semantic/spec-path.js";
+import { createRequestRecorder } from "./observability/record.js";
 
 const packageVersion = JSON.parse(
   fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")
@@ -39,21 +40,26 @@ const cmd = process.argv[2];
 if (cmd === "--version") { process.stdout.write(packageVersion + "\n"); process.exit(0); }
 if (!cmd || ["-h","--help","help"].includes(cmd)) { usage(); process.exit(0); }
 const repo = path.resolve(arg("--repo", process.cwd()));
+const recorder = createRequestRecorder({ transport: "cli" });
 
 try {
-  if (cmd === "index") print(await indexRepository({ repoRoot: repo, force: has("--force") }));
+  if (cmd === "index") print(await recorder.run({
+    operation: "index", repoRoot: repo, force: has("--force"),
+    execute: () => indexRepository({ repoRoot: repo, force: has("--force") })
+  }));
   else if (cmd === "query") {
     const task = arg("--task"); if (!task) throw new Error("--task is required");
     const maxFiles = Number(arg("--max-files", "12"));
     const semanticProviderPath = arg("--semantic-provider");
-    const result = semanticProviderPath
-      ? await queryContextWithSemantic({
-        repoRoot: repo,
-        task,
-        maxFiles,
-        semanticProviderSpec: loadCliSemanticProviderSpecV1(semanticProviderPath)
-      })
-      : queryContext({ repoRoot: repo, task, maxFiles });
+    const result = await recorder.run({
+      operation: "query", repoRoot: repo, task,
+      execute: () => semanticProviderPath
+        ? queryContextWithSemantic({
+          repoRoot: repo, task, maxFiles,
+          semanticProviderSpec: loadCliSemanticProviderSpecV1(semanticProviderPath)
+        })
+        : queryContext({ repoRoot: repo, task, maxFiles })
+    });
     process.stdout.write(serializeQueryOutput(result, { compact: has("--compact") }) + "\n");
   } else if (cmd === "flow") {
     const starts = args("--start");
@@ -100,7 +106,10 @@ try {
       outFile: path.resolve(out),
       repository: arg("--repository") ?? undefined
     }));
-  } else if (cmd === "status") print(await readIndexStatus({ repoRoot: repo }));
+  } else if (cmd === "status") print(await recorder.run({
+    operation: "status", repoRoot: repo,
+    execute: () => readIndexStatus({ repoRoot: repo })
+  }));
   else if (cmd === "review-feature") {
     const id = arg("--feature"); if (!id) throw new Error("--feature is required");
     const { db } = openStore(path.join(repo, ".context-index"));
@@ -109,4 +118,6 @@ try {
 } catch (error) {
   print({ ok:false, error:error instanceof Error ? error.message : String(error) });
   process.exitCode = 1;
+} finally {
+  recorder.close();
 }

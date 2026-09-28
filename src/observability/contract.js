@@ -76,7 +76,9 @@ const fields = {
     must_read_count: count, maybe_read_count: count, test_count: count,
     full_bytes: count, compact_bytes: count,
     estimated_full_tokens: count.nullable(), estimated_compact_tokens: count.nullable(),
-    token_estimation_method: z.literal("unavailable")
+    token_estimation_method: z.literal("unavailable"),
+    semantic_fallback: z.boolean().optional(),
+    measurement_source: z.literal("measured").optional()
   }).strict().refine((value) => value.estimated_full_tokens === null
     && value.estimated_compact_tokens === null,
   "tokens cannot be reported before an estimator is defined"),

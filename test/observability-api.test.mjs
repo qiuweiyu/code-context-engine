@@ -113,6 +113,9 @@ test("requests pagination, detail and observed metrics use real stored events", 
   assert.deepEqual(detail.body.request.events.map((event) => event.event_type), [
     "request_started", "request_completed"
   ]);
+  const observed = await get(api.url + "/status");
+  assert.equal(observed.body.telemetry.capture, "observed");
+  assert.equal(observed.body.client_identity, "unavailable");
   const metrics = await get(api.url + "/metrics");
   assert.equal(metrics.body.requests_all_time, 3);
   assert.equal(metrics.body.requests, 3);

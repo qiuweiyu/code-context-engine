@@ -32,7 +32,7 @@ function operation(value) {
   return ({ query: "上下文查询", index: "构建索引", status: "索引状态" })[value] ?? "未知操作";
 }
 function statusText(value) {
-  return ({ success: "成功", failure: "失败", running: "进行中" })[value] ?? "未知";
+  return ({ success: "成功", failure: "失败", running: "未完成记录" })[value] ?? "未知";
 }
 function clientText(value) {
   return value === "mcp" ? "MCP · 应用未识别" : value === "cli" ? "CLI" : "不可用";
@@ -77,7 +77,9 @@ function renderStatus(data) {
   put("#last-indexed", "不可用");
   put("#setting-address", data.listen ? `${data.listen.host}:${data.listen.port}` : "不可用");
   put("#setting-version", data.runtime?.package_version);
-  put("#setting-capture", data.telemetry?.capture === "inactive" ? "未启用" : "不可用");
+  put("#setting-capture", data.telemetry?.capture === "observed"
+    ? "已有请求记录 · 客户端状态未知"
+    : data.telemetry?.capture === "inactive" ? "尚无请求记录" : "不可用");
   put("#setting-days", data.telemetry?.retention_days != null ? `${data.telemetry.retention_days} 天` : "不可用");
   put("#setting-max", data.telemetry?.max_requests != null ? `${data.telemetry.max_requests} 条` : "不可用");
   $("#capture-notice").hidden = data.telemetry?.capture !== "inactive";
@@ -244,7 +246,8 @@ async function openDrawer(requestId) {
         drawerRow("状态", statusText(request.status)),
         drawerRow("耗时", duration(request.duration_ms)),
         drawerRow("传输方式", clientText(request.client_transport)),
-        drawerRow("请求 ID", request.request_id)
+        drawerRow("请求 ID", request.request_id),
+        drawerRow("语义回退", output?.semantic_fallback === true ? "已发生" : output ? "未发生" : "不可用")
       ]),
       drawerSection("查询与选择", [
         node("div", "drawer-explain", "原始查询文本与返回文件路径在当前隐私契约中未保存，无法在此展示。"),
@@ -253,7 +256,9 @@ async function openDrawer(requestId) {
         drawerRow("maybe_read", selected?.maybe_read_count != null ? `${selected.maybe_read_count} 个文件` : "不可用"),
         drawerRow("tests", selected?.test_count != null ? `${selected.test_count} 个文件` : "不可用"),
         drawerRow("Full 输出", output?.full_bytes != null ? `${output.full_bytes} bytes` : "不可用"),
-        drawerRow("Compact 输出", output?.compact_bytes != null ? `${output.compact_bytes} bytes` : "不可用")
+        drawerRow("Compact 输出", output?.compact_bytes != null ? `${output.compact_bytes} bytes` : "不可用"),
+        drawerRow("字节来源", output?.measurement_source === "measured"
+          ? "Measured · CCE 序列化输出" : "不可用")
       ]),
       drawerSection("事件顺序", [timeline])
     );

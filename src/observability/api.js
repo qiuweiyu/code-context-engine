@@ -100,7 +100,8 @@ function router(req, res, { store, port, runtime, clock }) {
         },
         telemetry: {
           schema_version: TELEMETRY_STORE_VERSION,
-          capture: "inactive",
+          capture: store.getMetrics({ since: new Date(0) }).requests_all_time > 0
+            ? "observed" : "inactive",
           ...store.getSettings()
         },
         listen: { host: HOST, port },

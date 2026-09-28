@@ -10,8 +10,11 @@ import { buildRepositoryFlowManifest } from "./context/flow-manifest.js";
 import { serializeQueryOutput } from "./context/query-output.js";
 import { loadMcpSemanticProviderSpecV1 } from "./semantic/spec-path.js";
 import { packageVersion } from "./runtime.js";
+import { createRequestRecorder } from "./observability/record.js";
 
 const server = new McpServer({ name: "code-context-engine", version: packageVersion });
+const recorder = createRequestRecorder({ transport: "mcp" });
+process.once("exit", () => recorder.close());
 const textResult = (value) => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
 const queryTextResult = (value, compact = false) => ({
   content: [{ type: "text", text: serializeQueryOutput(value, { compact }) }]
@@ -30,8 +33,12 @@ server.registerTool(
   },
   async ({ repo_root, force }) => {
     try {
-      const allowed = assertAllowedPath(repo_root);
-      return textResult(await indexRepository({ repoRoot: allowed, force: force ?? false }));
+      return textResult(await recorder.run({
+        operation: "index", repoRoot: repo_root, force,
+        execute: () => indexRepository({
+          repoRoot: assertAllowedPath(repo_root), force: force ?? false
+        })
+      }));
     } catch (error) {
       return textResult({ ok: false, error: error instanceof Error ? error.message : "unknown error" });
     }
@@ -56,19 +63,21 @@ server.registerTool(
   },
   async ({ repo_root, task, max_files, compact, semantic_provider }) => {
     try {
-      const allowed = assertAllowedPath(repo_root);
-      const maxFiles = max_files ?? 12;
-      const result = semantic_provider
-        ? await queryContextWithSemantic({
-          repoRoot: allowed,
-          task,
-          maxFiles,
-          semanticProviderSpec: loadMcpSemanticProviderSpecV1({
-            repoRoot: allowed,
-            specPath: semantic_provider
-          })
-        })
-        : queryContext({ repoRoot: allowed, task, maxFiles });
+      const result = await recorder.run({
+        operation: "query", repoRoot: repo_root, task,
+        execute: async () => {
+          const allowed = assertAllowedPath(repo_root);
+          const maxFiles = max_files ?? 12;
+          return semantic_provider
+            ? queryContextWithSemantic({
+              repoRoot: allowed, task, maxFiles,
+              semanticProviderSpec: loadMcpSemanticProviderSpecV1({
+                repoRoot: allowed, specPath: semantic_provider
+              })
+            })
+            : queryContext({ repoRoot: allowed, task, maxFiles });
+        }
+      });
       return queryTextResult(
         result,
         compact ?? false
@@ -146,8 +155,10 @@ server.registerTool(
   },
   async ({ repo_root }) => {
     try {
-      const allowed = assertAllowedPath(repo_root);
-      return textResult(await readIndexStatus({ repoRoot: allowed }));
+      return textResult(await recorder.run({
+        operation: "status", repoRoot: repo_root,
+        execute: () => readIndexStatus({ repoRoot: assertAllowedPath(repo_root) })
+      }));
     } catch (error) {
       return textResult({ ok: false, error: error instanceof Error ? error.message : "unknown error" });
     }
