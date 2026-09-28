@@ -286,6 +286,32 @@ function applyIntentPathBoost(files, builtinTerms) {
   return boosted;
 }
 
+function applyDeveloperIntentSurfaceBoost(files, fileRows, expansion) {
+  const groups = (expansion.applied_aliases ?? [])
+    .filter((entry) => entry.source === "developer")
+    .map((entry) => ({ key: entry.key, terms: aliasEntryTerms(entry) }))
+    .filter((entry) => entry.terms.length > 0);
+  if (groups.length === 0) return 0;
+
+  const boosted = new Set();
+  for (const group of groups) {
+    for (const row of fileRows) {
+      const score = Math.min(18, textScore(row.path, group.terms, 9));
+      if (score <= 0) continue;
+      addFile(
+        files,
+        row.path,
+        score,
+        `developer_intent:${group.key}`,
+        null,
+        "developer_intent"
+      );
+      boosted.add(row.path);
+    }
+  }
+  return boosted.size;
+}
+
 function aliasEntryTerms(entry) {
   const out = new Set();
   for (const alias of entry?.aliases ?? []) {
@@ -300,10 +326,17 @@ function aliasEntryTerms(entry) {
 
 function selectWithIntentReservations(rankedFiles, maxFiles, expansion) {
   const limit = Math.max(1, Number(maxFiles) || 1);
-  const builtinGroups = (expansion.applied_aliases ?? [])
-    .filter((entry) => entry.source === "builtin")
-    .map((entry) => ({ key: entry.key, terms: aliasEntryTerms(entry) }))
-    .filter((entry) => entry.terms.length > 0);
+  const intentGroups = (expansion.applied_aliases ?? [])
+    .filter((entry) => ["builtin", "developer"].includes(entry.source))
+    .map((entry) => ({
+      source: entry.source,
+      key: entry.key,
+      terms: aliasEntryTerms(entry)
+    }))
+    .filter((entry) => entry.terms.length > 0)
+    .sort((a, b) =>
+      (a.source === "developer" ? 0 : 1) - (b.source === "developer" ? 0 : 1)
+    );
 
   const reservationBudget = Math.min(
     6,
@@ -311,17 +344,22 @@ function selectWithIntentReservations(rankedFiles, maxFiles, expansion) {
   );
   const reservedPaths = [];
   const reservedSet = new Set();
+  const developerReservedSet = new Set();
 
-  for (const group of builtinGroups) {
+  for (const group of intentGroups) {
     if (reservedPaths.length >= reservationBudget) break;
+    const reason = group.source === "developer"
+      ? `developer_intent:${group.key}`
+      : "intent_path_match";
     const matches = rankedFiles.filter((entry) =>
-      entry.reasons.includes("intent_path_match")
+      entry.reasons.includes(reason)
       && textScore(entry.path, group.terms, 1) > 0
     );
     for (const entry of matches.slice(0, 2)) {
       if (reservedSet.has(entry.path)) continue;
       reservedSet.add(entry.path);
       reservedPaths.push(entry.path);
+      if (group.source === "developer") developerReservedSet.add(entry.path);
       if (reservedPaths.length >= reservationBudget) break;
     }
   }
@@ -347,9 +385,11 @@ function selectWithIntentReservations(rankedFiles, maxFiles, expansion) {
     - (rank.get(b.path) ?? Number.MAX_SAFE_INTEGER)
   );
 
+  const selectedReservedPaths = reservedPaths.filter((path) => selectedSet.has(path));
   return {
     selected,
-    reserved_files: reservedPaths.filter((path) => selectedSet.has(path))
+    reserved_files: selectedReservedPaths,
+    developer_reserved_files: selectedReservedPaths.filter((path) => developerReservedSet.has(path))
   };
 }
 
@@ -464,6 +504,7 @@ function buildQueryContextState({ repoRoot, task, indexDir = ".context-index", m
       const score = projectScore + genericScore;
       if (score > 0) addFile(files, fileRow.path, score, "path_match", null, "path");
     }
+    applyDeveloperIntentSurfaceBoost(files, fileRows, expansion);
 
     const seedSymbols = new Set([...files.values()].flatMap((x)=>[...x.symbols]));
     const nonTestFiles = new Set(
@@ -575,8 +616,15 @@ function finalizeQueryContext(state, rankedFiles, semanticRefinement = null) {
   }));
   const implementation = selected.filter((x) => !fileIsTest[x.path]);
   const selectedTests = selected.filter((x) => fileIsTest[x.path]);
-  const mustRead = implementation.slice(0, Math.min(8, implementation.length));
-  const maybeRead = implementation.slice(mustRead.length);
+  const developerReservedSet = new Set(selection.developer_reserved_files);
+  const prioritizedImplementation = [
+    ...selection.developer_reserved_files
+      .map((reservedPath) => implementation.find((entry) => entry.path === reservedPath))
+      .filter(Boolean),
+    ...implementation.filter((entry) => !developerReservedSet.has(entry.path))
+  ];
+  const mustRead = prioritizedImplementation.slice(0, Math.min(8, prioritizedImplementation.length));
+  const maybeRead = prioritizedImplementation.slice(mustRead.length);
   const wantedSymbolIds = new Set(selected.flatMap((x) => x.symbols));
   const symbolRows = symbols.filter(
     (symbol) => wantedSymbolIds.has(symbol.symbol_id) || selectedSet.has(symbol.file_path)
