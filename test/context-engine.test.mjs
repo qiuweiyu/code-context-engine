@@ -95,7 +95,7 @@ test("context index is incremental and feature freshness follows code changes", 
     await fs.writeFile(goPath, go);
     const renamed = await indexRepository({ repoRoot: root });
     assert.equal(renamed.manifest.feature_status.stale, 1);
-    const status = readIndexStatus({ repoRoot: root });
+    const status = await readIndexStatus({ repoRoot: root });
     assert.equal(status.features[0].status, "stale");
     assert.equal(status.features[0].stale_reason, "unresolved_feature_symbol");
   } finally {
