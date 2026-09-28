@@ -37,7 +37,7 @@ CCE turns those facts into a local machine-readable index that can be refreshed 
 
 ## Current status
 
-`v0.2.0` is the first public installable release.
+`v0.3.0` is the GitHub-only observability preview. npm publication is deferred; `v0.2.0` was the first GitHub release.
 
 Implemented today:
 
@@ -131,6 +131,17 @@ A stale feature should not be treated as reliable context until the reference is
 - Go, only when indexing Go projects
 
 ## Install
+
+For the current GitHub release:
+
+```bash
+git clone --branch v0.3.0 https://github.com/qiuweiyu/code-context-engine.git
+cd code-context-engine
+npm install --no-package-lock
+npm run start:observability
+```
+
+Open `http://127.0.0.1:8765/` on the same machine. npm publication is deferred until this GitHub release has run stably. See the [v0.3.0 release notes](docs/RELEASE-NOTES-v0.3.0.md).
 
 After the npm release is published:
 

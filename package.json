@@ -1,6 +1,6 @@
 {
   "name": "code-context-engine",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local-first deterministic code context engine for symbols, calls, routes, data flows, tests, graph traversal, MCP, and optional bounded semantic reranking.",
   "type": "module",
   "license": "MIT",

@@ -52,7 +52,7 @@ Human / IDE / Coding Agent
 
 ## 当前状态
 
-`v0.2.0` 是第一版面向外部用户的可安装 Release。
+`v0.3.0` 是 GitHub 上的本地观测台预览版，暂不发布到 npm；`v0.2.0` 是首个 GitHub Release。
 
 当前已经实现：
 
@@ -176,6 +176,17 @@ feature status → stale
 - 只有分析 Go 项目时才需要本机 Go
 
 ## 安装
+
+当前 GitHub Release 可从源码运行：
+
+```bash
+git clone --branch v0.3.0 https://github.com/qiuweiyu/code-context-engine.git
+cd code-context-engine
+npm install --no-package-lock
+npm run start:observability
+```
+
+在同一台机器打开 `http://127.0.0.1:8765/`。暂缓 npm 发布，待 GitHub 版本稳定运行后再发布。参见 [v0.3.0 发布说明](docs/RELEASE-NOTES-v0.3.0.md)。
 
 npm 正式发布后，推荐全局安装：
 
