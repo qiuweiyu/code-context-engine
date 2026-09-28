@@ -45,7 +45,8 @@ async function createFixture() {
     "export function extractClientRoutes() { return normalizeClientPath(); }"
   ].join("\n") + "\n");
   await write(root, "benchmarks/fixtures/cmd/worker.js", [
-    "export function main() { return 'semantic provider command'; }"
+    "export function semanticProviderCliCommand() { return 'semantic provider command cli mcp'; }",
+    "export function semanticProviderCliCommandRunner() { return semanticProviderCliCommand(); }"
   ].join("\n") + "\n");
 
   for (let i = 0; i < 10; i++) {
