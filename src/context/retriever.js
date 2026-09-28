@@ -499,11 +499,19 @@ function selectWithIntentReservations(rankedFiles, maxFiles, expansion) {
     const reason = group.source === "developer"
       ? `developer_intent:${group.key}`
       : "intent_path_match";
-    const matches = rankedFiles.filter((entry) =>
-      entry.reasons.includes(reason)
-      && (group.source !== "developer"
-        || developerPathSurfaceScore(entry.path, group.terms) > 0)
-    );
+    const matches = rankedFiles
+      .filter((entry) =>
+        entry.reasons.includes(reason)
+        && (group.source !== "developer"
+          || developerPathSurfaceScore(entry.path, group.terms) > 0)
+      )
+      .sort((a, b) => {
+        if (group.source !== "developer") return 0;
+        return developerPathSurfaceScore(b.path, group.terms)
+          - developerPathSurfaceScore(a.path, group.terms)
+          || b.score - a.score
+          || a.path.localeCompare(b.path);
+      });
     const perGroupLimit = group.source === "developer" ? 1 : 2;
     for (const entry of matches.slice(0, perGroupLimit)) {
       if (reservedSet.has(entry.path)) continue;
