@@ -28,6 +28,14 @@ function duration(value) {
   return typeof value === "number" && Number.isFinite(value)
     ? `${Math.round(value * 10) / 10} ms` : "—";
 }
+function amount(value) { return new Intl.NumberFormat("zh-CN").format(value); }
+function comparison(full, compact, unit) {
+  if (!Number.isSafeInteger(full) || !Number.isSafeInteger(compact)) return "不可用";
+  const diff = full - compact;
+  const percent = full > 0 ? `${(Math.abs(diff) / full * 100).toFixed(1)}%` : "比例不可用";
+  return diff === 0 ? `持平 · 0 ${unit}`
+    : `${diff > 0 ? "减少" : "增加"} ${amount(Math.abs(diff))} ${unit} · ${percent}`;
+}
 function operation(value) {
   return ({ query: "上下文查询", index: "构建索引", status: "索引状态" })[value] ?? "未知操作";
 }
@@ -225,12 +233,14 @@ async function openDrawer(requestId) {
   body.append(node("p", "panel-note", "正在读取请求详情…"));
   $("#drawer-close").focus();
   try {
-    const { request } = await json(`/requests/${encodeURIComponent(requestId)}`);
+    const { request, effects = [] } = await json(`/requests/${encodeURIComponent(requestId)}`);
     if (drawer.hidden) return;
     const events = request.events ?? [];
     const expansion = events.find((event) => event.event_type === "query_expanded")?.payload;
     const selected = events.find((event) => event.event_type === "context_selected")?.payload;
     const output = events.find((event) => event.event_type === "query_completed")?.payload;
+    const measured = effects.find((effect) => effect.measurement_source === "measured");
+    const estimated = effects.find((effect) => effect.measurement_source === "estimated");
     const timeline = node("ol", "event-list");
     for (const event of events) {
       const item = node("li", "", eventLabels[event.event_type] ?? event.event_type);
@@ -257,8 +267,14 @@ async function openDrawer(requestId) {
         drawerRow("tests", selected?.test_count != null ? `${selected.test_count} 个文件` : "不可用"),
         drawerRow("Full 输出", output?.full_bytes != null ? `${output.full_bytes} bytes` : "不可用"),
         drawerRow("Compact 输出", output?.compact_bytes != null ? `${output.compact_bytes} bytes` : "不可用"),
-        drawerRow("字节来源", output?.measurement_source === "measured"
-          ? "Measured · CCE 序列化输出" : "不可用")
+        drawerRow("字节来源", measured ? "Measured · CCE 序列化输出" : "不可用"),
+        drawerRow("字节变化", measured
+          ? comparison(measured.full_bytes, measured.compact_bytes, "bytes") : "不可用"),
+        drawerRow("估算 Full", estimated ? `${amount(estimated.full_tokens)} tokens` : "不可用"),
+        drawerRow("估算 Compact", estimated ? `${amount(estimated.compact_tokens)} tokens` : "不可用"),
+        drawerRow("估算变化", estimated
+          ? comparison(estimated.full_tokens, estimated.compact_tokens, "tokens") : "不可用"),
+        drawerRow("估算来源", estimated ? `Estimated · ${estimated.method}` : "不可用")
       ]),
       drawerSection("事件顺序", [timeline])
     );
@@ -291,14 +307,36 @@ function switchView(view) {
   if (view === "requests" && !state.requests.length) loadRequests();
   if (view === "effects") refreshEffects();
 }
+function clearEffects(message) {
+  for (const target of [
+    "#effects-full-bytes", "#effects-compact-bytes", "#effects-byte-delta",
+    "#effects-full-tokens", "#effects-compact-tokens", "#effects-token-delta"
+  ]) put(target, "—");
+  put("#effects-measured-count", "无可计量记录");
+  put("#effects-notice-title", "等待可计量的查询");
+  put("#effects-note", message);
+}
 async function refreshEffects() {
   try {
-    const effects = await json("/effects");
-    put("#effects-note", effects.status === "unavailable"
-      ? "计量尚未实现。这里不会把输出字节压缩率写成真实模型 Token 节省。"
-      : "请查看已记录的测量来源与方法。");
+    const data = await json("/effects");
+    const measured = data.measurements.find((effect) => effect.measurement_source === "measured");
+    const estimated = data.measurements.find((effect) => effect.measurement_source === "estimated");
+    if (!measured || !estimated) {
+      clearEffects(`当前保留的 ${data.query_counts.successful} 条成功查询中，没有可计量输出。`);
+      return;
+    }
+    put("#effects-notice-title", "仅为 CCE 输出对比");
+    put("#effects-note", `保留的成功查询中，已计量 ${data.query_counts.measured} 条，未计量 ${data.query_counts.unmeasured} 条。无真实 Agent 对照实验数据。`);
+    put("#effects-full-bytes", `${amount(measured.full_bytes)} bytes`);
+    put("#effects-compact-bytes", `${amount(measured.compact_bytes)} bytes`);
+    put("#effects-byte-delta", comparison(measured.full_bytes, measured.compact_bytes, "bytes"));
+    put("#effects-measured-count", `${amount(data.query_counts.measured)} 条成功查询 · Measured`);
+    put("#effects-full-tokens", `${amount(estimated.full_tokens)} tokens`);
+    put("#effects-compact-tokens", `${amount(estimated.compact_tokens)} tokens`);
+    put("#effects-token-delta", comparison(estimated.full_tokens, estimated.compact_tokens, "tokens"));
+    put("#effects-token-method", `Estimated · ${estimated.method}`);
   } catch {
-    put("#effects-note", "收益接口暂时无法读取。当前不显示任何估算数字。");
+    clearEffects("收益接口暂时无法读取，不显示旧数据或估算数字。");
   }
 }
 async function refreshView() {

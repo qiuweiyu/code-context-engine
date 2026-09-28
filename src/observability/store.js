@@ -4,6 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { TELEMETRY_SCHEMA_VERSION, createTelemetryEvent } from "./contract.js";
+import { addEffects, effectsFromCompletedEvent, totalEffects } from "./effects.js";
 
 export const TELEMETRY_STORE_VERSION = 1;
 const DEFAULT_RETENTION_DAYS = 30;
@@ -286,8 +287,38 @@ export function openTelemetryStore({
       last_request_at: window.last_request_at
     };
   };
+  const getEffects = () => {
+    active();
+    const rows = db.prepare(`
+      SELECT e.event_json
+      FROM requests r
+      LEFT JOIN events e ON e.id = (
+        SELECT MAX(e2.id) FROM events e2
+        WHERE e2.request_id = r.request_id AND e2.event_type = 'query_completed'
+      )
+      WHERE r.operation = 'query' AND r.status = 'success'
+    `).all();
+    const total = {
+      measured_queries: 0, full_bytes: 0, compact_bytes: 0,
+      full_tokens: 0, compact_tokens: 0
+    };
+    for (const row of rows) {
+      if (!row.event_json) continue;
+      addEffects(total, effectsFromCompletedEvent(
+        createTelemetryEvent(JSON.parse(row.event_json))));
+    }
+    return {
+      scope: "retained_history",
+      query_counts: {
+        successful: rows.length,
+        measured: total.measured_queries,
+        unmeasured: rows.length - total.measured_queries
+      },
+      measurements: totalEffects(total)
+    };
+  };
   return {
-    dbPath, appendEvent, listRequests, getRequest, getMetrics, prune,
+    dbPath, appendEvent, listRequests, getRequest, getMetrics, getEffects, prune,
     getSettings() { return { retention_days: retentionDays, max_requests: maxRequests }; },
     close() { if (!closed) { db.close(); closed = true; } }
   };

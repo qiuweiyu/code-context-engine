@@ -183,3 +183,31 @@ test("two local connections share committed events without changing the index", 
     assert.equal(fs.existsSync(path.join(options.directory, "index.sqlite")), false);
   } finally { first.close(); second.close(); }
 });
+
+test("effect totals respect request retention rather than claiming lifetime savings", async (t) => {
+  const options = await fixture(t, { maxRequests: 2 });
+  const store = openTelemetryStore(options);
+  try {
+    for (let n = 1; n <= 3; n++) {
+      store.appendEvent(start(n));
+      store.appendEvent({
+        ...envelope(n), event_type: "query_completed",
+        payload: {
+          duration_ms: 1, status: "success", index_freshness: "unavailable",
+          reindexed: "no", must_read_count: 0, maybe_read_count: 0,
+          test_count: 0, full_bytes: n * 4, compact_bytes: n,
+          estimated_full_tokens: null, estimated_compact_tokens: null,
+          token_estimation_method: "unavailable", measurement_source: "measured"
+        }
+      });
+      store.appendEvent(finish(n));
+    }
+    assert.equal(store.getRequest(uuid(1)), null);
+    assert.deepEqual(store.getEffects().query_counts,
+      { successful: 2, measured: 2, unmeasured: 0 });
+    assert.deepEqual(store.getEffects().measurements[0], {
+      measurement_source: "measured", scope: "cce_output",
+      full_bytes: 20, compact_bytes: 5
+    });
+  } finally { store.close(); }
+});

@@ -17,9 +17,10 @@ JavaScript shell under `src/observability/ui/`.
   `/requests/:id` for a chronological event drawer. It shows only fields
   stored by the current privacy contract; original task and selected file
   paths are explicitly unavailable.
-- **Effects** explains Measured, Estimated and Controlled Experiment.
-  `/effects` reports unavailable until WP20-F. No placeholder values are
-  interpreted as savings.
+- **Effects** compares measured Full/Compact CCE output bytes and separately
+  estimated tokens over retained, successful measured queries. It reports
+  exclusions, displays increases as increases, and keeps Controlled
+  Experiment unavailable until real Agent comparisons exist.
 - **Settings** shows observed listening address, runtime version,
   retention days and maximum requests. Editing controls are deferred
   until a writable configuration contract exists. The DB path is hidden.
@@ -34,5 +35,6 @@ all four navigation items without sideways scrolling.
 WP20-D is a read-only shell. WP20-E records real MCP/CLI index/status/query
 operations in the per-user store. Stored requests prove historical activity,
 not that an MCP client is connected right now. The privacy contract does not
-retain raw task text or file paths. WP20-F adds aggregated effect metrics and
-token estimates; current bytes in a query trace are measured serialized output.
+retain raw task text or file paths. WP20-F derives aggregate Measured byte
+comparisons and Estimated token values from trace bytes without modifying the
+SQLite schema. See `observability-effects-v1.md` for limits and formulas.
