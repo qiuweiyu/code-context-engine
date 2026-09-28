@@ -99,7 +99,7 @@ try {
       outFile: path.resolve(out),
       repository: arg("--repository") ?? undefined
     }));
-  } else if (cmd === "status") print(readIndexStatus({ repoRoot: repo }));
+  } else if (cmd === "status") print(await readIndexStatus({ repoRoot: repo }));
   else if (cmd === "review-feature") {
     const id = arg("--feature"); if (!id) throw new Error("--feature is required");
     const { db } = openStore(path.join(repo, ".context-index"));
