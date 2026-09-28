@@ -504,7 +504,8 @@ function selectWithIntentReservations(rankedFiles, maxFiles, expansion) {
       && (group.source !== "developer"
         || developerPathSurfaceScore(entry.path, group.terms) > 0)
     );
-    for (const entry of matches.slice(0, 2)) {
+    const perGroupLimit = group.source === "developer" ? 1 : 2;
+    for (const entry of matches.slice(0, perGroupLimit)) {
       if (reservedSet.has(entry.path)) continue;
       reservedSet.add(entry.path);
       reservedPaths.push(entry.path);
