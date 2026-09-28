@@ -2,12 +2,13 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const expectedVersion = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8")).version;
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const git = process.platform === "win32" ? "git.exe" : "git";
 
@@ -44,7 +45,8 @@ async function verifyPackSurface() {
     "internal/scipexporter/main.go", "docs/QUICKSTART.md",
     "docs/QUICKSTART-ZH.md", "docs/INTEROPERABILITY.md",
     "docs/SEMANTIC-PROVIDER.md", "docs/KNOWN-LIMITATIONS.md",
-    "docs/RELEASE-NOTES-v0.2.0.md", "CHANGELOG.md",
+    "docs/RELEASE-NOTES-v0.2.0.md", "docs/RELEASE-NOTES-v0.3.0.md",
+    "CHANGELOG.md", "src/observability/api.js", "src/observability/ui/index.html",
     "scripts/release-smoke.mjs"
   ];
   const missing = required.filter((entry) => !files.includes(entry));
@@ -135,6 +137,31 @@ async function verifyMcpStarts(installRoot, fixtureRoot) {
   await stopChildTree(child);
 }
 
+async function verifyObservabilityUi(installRoot) {
+  const modulePath = path.join(
+    installRoot, "node_modules", "code-context-engine", "src", "observability", "api.js"
+  );
+  const { startObservabilityApi } = await import(pathToFileURL(modulePath).href);
+  const api = await startObservabilityApi({
+    port: 0, directory: path.join(installRoot, "telemetry")
+  });
+  try {
+    for (const [route, expected] of [
+      ["/", "CCE · 本地观测台"],
+      ["/status", '"service":"cce-observability"'],
+      ["/effects", '"controlled_experiment":{"status":"unavailable"']
+    ]) {
+      const response = await fetch(api.url + route);
+      const body = await response.text();
+      if (!response.ok || !body.includes(expected)) {
+        throw new Error("packed observability " + route + " failed");
+      }
+    }
+  } finally {
+    await api.close();
+  }
+}
+
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), "cce-release-smoke-"));
 try {
   const packDir = path.join(temp, "pack");
@@ -163,14 +190,14 @@ try {
     ), "utf8"),
     "installed package.json"
   );
-  if (installed.version !== "0.2.0") {
+  if (installed.version !== expectedVersion) {
     throw new Error("installed version mismatch: " + installed.version);
   }
 
   for (const bin of ["cce", "code-context-engine"]) {
     const help = await runBin(installRoot, bin, ["--help"]);
-    if (!(help.stderr + help.stdout).includes("Code Context Engine v0.2.0")) {
-      throw new Error(bin + " --help did not report v0.2.0");
+    if (!(help.stderr + help.stdout).includes("Code Context Engine v" + expectedVersion)) {
+      throw new Error(bin + " --help did not report v" + expectedVersion);
     }
   }
 
@@ -201,13 +228,14 @@ try {
   }
 
   await verifyMcpStarts(installRoot, fixtureRoot);
+  await verifyObservabilityUi(installRoot);
   process.stdout.write(JSON.stringify({
     ok: true,
-    package: "code-context-engine@0.2.0",
+    package: "code-context-engine@" + expectedVersion,
     packed_surface: surface,
     cli_bins: ["cce", "code-context-engine"],
     mcp_bin: "code-context-engine-mcp",
-    smoke: { index: true, status: true, query: true, mcp_start: true }
+    smoke: { index: true, status: true, query: true, mcp_start: true, observability_ui: true }
   }, null, 2) + "\n");
 } finally {
   await fs.rm(temp, {

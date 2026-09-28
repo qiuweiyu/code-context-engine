@@ -2,9 +2,27 @@
 
 All notable public changes to Code Context Engine are recorded here.
 
+## 0.3.0 — 2026-09-28
+
+GitHub-only observability preview. npm publication is deferred until the release has run stably.
+
+### Added
+
+- versioned observability event and request trace contract for CLI and MCP
+- independent local telemetry store with bounded retention and read-only loopback API
+- local Overview, Requests, Effects and Settings UI
+- measured Full/Compact CCE output bytes and deterministic estimated token counts
+
+### Measurement boundaries
+
+- Measured describes CCE output byte sizes; Estimated uses UTF-8 bytes divided by four, rounded up per query.
+- Controlled Experiment and actual Agent token savings remain unavailable until real comparative tasks are recorded.
+- Raw task text, source bodies and credentials are not captured; client and index status are shown as unavailable where unverified.
+- The local API binds to 127.0.0.1 only.
+
 ## 0.2.0 — 2026-09-27
 
-First public installable release.
+First public GitHub release, with an npm-ready tarball; npm publication deferred.
 
 ### Added
 
