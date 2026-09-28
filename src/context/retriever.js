@@ -370,6 +370,31 @@ function applyIntentPathBoost(files, builtinTerms) {
   return boosted;
 }
 
+function developerPathSurfaceScore(relPath, terms) {
+  const raw = String(relPath ?? "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replaceAll("\\", "/");
+  const normalized = raw.toLowerCase();
+  const base = path.posix.basename(normalized);
+  const stem = base.split(".")[0];
+  const tokens = new Set(
+    normalized
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean)
+  );
+
+  let score = 0;
+  for (const term of terms) {
+    const token = String(term ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+    if (token.length < 2) continue;
+    if (stem === token) score += 24;
+    else if (tokens.has(token)) score += 9;
+  }
+  return Math.min(30, score);
+}
+
 function applyDeveloperIntentSurfaceBoost(files, fileRows, expansion) {
   const groups = (expansion.applied_aliases ?? [])
     .filter((entry) =>
@@ -383,7 +408,7 @@ function applyDeveloperIntentSurfaceBoost(files, fileRows, expansion) {
   const boosted = new Set();
   for (const group of groups) {
     for (const row of fileRows) {
-      const score = Math.min(18, textScore(row.path, group.terms, 9));
+      const score = developerPathSurfaceScore(row.path, group.terms);
       if (score <= 0) continue;
       addFile(
         files,
@@ -476,7 +501,8 @@ function selectWithIntentReservations(rankedFiles, maxFiles, expansion) {
       : "intent_path_match";
     const matches = rankedFiles.filter((entry) =>
       entry.reasons.includes(reason)
-      && textScore(entry.path, group.terms, 1) > 0
+      && (group.source !== "developer"
+        || developerPathSurfaceScore(entry.path, group.terms) > 0)
     );
     for (const entry of matches.slice(0, 2)) {
       if (reservedSet.has(entry.path)) continue;
