@@ -97,10 +97,7 @@ test("developer intent reserves CLI and MCP entry surfaces for the real semantic
     assert.ok(result.selection.intent_reserved_files.includes("src/cli.js"));
     assert.ok(result.selection.intent_reserved_files.includes("src/server.js"));
     assert.ok(!result.selection.intent_reserved_files.includes("src/context/client-requests.js"));
-    assert.ok(
-      result.selection.intent_reserved_files.indexOf("src/cli.js")
-        < result.selection.intent_reserved_files.indexOf("benchmarks/fixtures/cmd/worker.js")
-    );
+    assert.ok(!result.selection.intent_reserved_files.includes("benchmarks/fixtures/cmd/worker.js"));
 
     const developerAliases = result.query_expansion.applied_aliases
       .filter((entry) => entry.source === "developer")
