@@ -138,6 +138,34 @@ function surfaceFocusTerms(terms) {
   );
 }
 
+function directTestSubjectTerms(expansion) {
+  const out = new Set();
+  for (const entry of expansion.applied_aliases ?? []) {
+    if (entry.source !== "developer") continue;
+    const key = String(entry.key).toLowerCase();
+    if (["test", "测试", "version", "版本"].includes(key)) continue;
+    for (const term of aliasEntryTerms(entry)) out.add(term);
+  }
+  return [...out];
+}
+
+function exactTokenScore(text, terms, weight = 1) {
+  const tokens = new Set(
+    String(text ?? "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean)
+  );
+  let score = 0;
+  for (const term of terms) {
+    const token = String(term ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+    if (token.length >= 2 && tokens.has(token)) score += weight;
+  }
+  return score;
+}
+
 function addFile(map, file, score, reason, symbol = null, channel = "misc") {
   if (!file) return;
   const current = map.get(file) ?? {
@@ -443,14 +471,20 @@ function applyDirectTestSurface(files, testRows, repoRoot, task, expansion) {
   const intents = surfaceIntents(task, expansion);
   if (!intents.test) return 0;
   const terms = surfaceFocusTerms(expansion.terms ?? []);
-  if (terms.length === 0) return 0;
+  const subjectTerms = directTestSubjectTerms(expansion);
+  if (terms.length === 0 && subjectTerms.length === 0) return 0;
 
   let matched = 0;
   for (const row of testRows) {
-    const pathScore = textScore(row.path, terms, 5);
     const preview = readIndexedPreview(repoRoot, row.path);
-    const previewScore = textScore(preview, terms, 2);
-    const score = Math.min(24, pathScore + previewScore);
+    const subjectScore = subjectTerms.length > 0
+      ? developerPathSurfaceScore(row.path, subjectTerms)
+        + exactTokenScore(preview, subjectTerms, 6)
+      : 0;
+    const genericScore =
+      textScore(row.path, terms, 3)
+      + textScore(preview, terms, 1);
+    const score = Math.min(48, subjectScore + Math.min(18, genericScore));
     if (score <= 0) continue;
     addFile(files, row.path, score, "direct_test_match", null, "direct_test");
     matched++;
@@ -527,7 +561,15 @@ function selectWithIntentReservations(rankedFiles, maxFiles, expansion) {
     ["direct_test_match", testReservedSet, 2]
   ]) {
     if (reservedPaths.length >= reservationBudget) break;
-    const matches = rankedFiles.filter((entry) => entry.reasons.includes(reason));
+    const matches = rankedFiles
+      .filter((entry) => entry.reasons.includes(reason))
+      .sort((a, b) => {
+        const channel = reason === "direct_test_match" ? "direct_test" : "manifest";
+        return Number(b.channel_scores?.[channel] ?? 0)
+          - Number(a.channel_scores?.[channel] ?? 0)
+          || b.score - a.score
+          || a.path.localeCompare(b.path);
+      });
     let added = 0;
     for (const entry of matches) {
       if (reservedSet.has(entry.path)) continue;
