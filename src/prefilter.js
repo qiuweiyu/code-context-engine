@@ -35,6 +35,22 @@ export const BUILTIN_QUERY_ALIASES = Object.freeze({
   "二维码": ["qrcode", "qr"]
 });
 
+export const DEVELOPER_QUERY_ALIASES = Object.freeze({
+  "cli": ["cli", "command", "commandline", "cmd"],
+  "命令行": ["cli", "command", "commandline", "cmd"],
+  "mcp": ["mcp", "server"],
+  "入口": ["entry", "entrypoint", "main"],
+  "entrypoint": ["entry", "entrypoint", "main"],
+  "version": ["version"],
+  "版本": ["version"],
+  "config": ["config", "configuration", "settings"],
+  "配置": ["config", "configuration", "settings"],
+  "test": ["test", "spec", "acceptance"],
+  "测试": ["test", "spec", "acceptance"],
+  "api": ["api", "route", "router", "handler", "endpoint"],
+  "迁移": ["migration", "migrations", "schema"]
+});
+
 function rawTerms(text) {
   return String(text ?? "")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -74,6 +90,9 @@ export function expandQuery(text, customAliases = {}) {
   const merged = new Map();
   for (const [key, value] of Object.entries(BUILTIN_QUERY_ALIASES)) {
     merged.set(key, { source: "builtin", value });
+  }
+  for (const [key, value] of Object.entries(DEVELOPER_QUERY_ALIASES)) {
+    merged.set(key, { source: "developer", value });
   }
   for (const [key, value] of Object.entries(customAliases ?? {})) {
     merged.set(key, { source: "project", value });
