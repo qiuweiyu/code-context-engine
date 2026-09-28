@@ -163,3 +163,36 @@ test("API closes owned storage and releases the listening socket", async (t) => 
   await api.close();
   await assert.rejects(fetch(api.url + "/status"));
 });
+
+test("UI assets are same-origin, allowlisted and protected by a restrictive CSP", async (t) => {
+  const { api } = await fixture(t);
+  const html = await fetch(api.url + "/");
+  assert.equal(html.status, 200);
+  assert.match(html.headers.get("content-type"), /text\/html/);
+  assert.match(html.headers.get("content-security-policy"), /script-src 'self'/);
+  assert.equal(html.headers.get("cache-control"), "no-store");
+  const markup = await html.text();
+  for (const page of ["overview", "requests", "effects", "settings"]) {
+    assert.match(markup, new RegExp(`data-view="${page}"`));
+  }
+  assert.equal(markup.includes("https://"), false);
+  for (const [path, type] of [["/app.js", "text/javascript"], ["/styles.css", "text/css"], ["/favicon.svg", "image/svg+xml"]]) {
+    const response = await fetch(api.url + path);
+    assert.equal(response.status, 200, path);
+    assert.ok(response.headers.get("content-type").includes(type));
+    assert.ok((await response.text()).length > 100);
+  }
+  assert.equal((await get(api.url + "/../package.json")).response.status, 404);
+  assert.equal((await get(api.url + "/ui/app.js")).response.status, 404);
+  assert.equal((await get(api.url + "/?unrecognized=1")).response.status, 400);
+  assert.equal((await request(api.url + "/", { host: "evil.example" })).status, 403);
+});
+
+test("status exposes actual retention settings without exposing the database path", async (t) => {
+  const { api, directory } = await fixture(t);
+  const { body } = await get(api.url + "/status");
+  assert.equal(body.telemetry.retention_days, 30);
+  assert.equal(body.telemetry.max_requests, 5000);
+  assert.equal(body.listen.host, "127.0.0.1");
+  assert.equal(JSON.stringify(body).includes(directory), false);
+});

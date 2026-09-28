@@ -33,6 +33,6 @@ developer interface, not a public or authenticated network service.
   WP20-F implements measurement. It makes no token savings claim.
 
 For example, `curl http://127.0.0.1:8765/status` reads the local state.
-The API is a stable boundary for WP20-D's UI; the UI must not query SQLite
-tables directly. WP20-E will connect MCP/CLI request events, including
+The API is the stable boundary for WP20-D's UI; the UI does not query SQLite
+tables directly. The local homepage at `/` serves the UI shell. WP20-E will connect MCP/CLI request events, including
 best-effort writes that never fail an ordinary code query.

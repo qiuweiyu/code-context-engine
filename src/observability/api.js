@@ -1,14 +1,23 @@
 import http from "node:http";
+import fs from "node:fs";
 import { openTelemetryStore, TELEMETRY_STORE_VERSION } from "./store.js";
 import { runtimeIdentity } from "../runtime.js";
 
 const HOST = "127.0.0.1";
 const DEFAULT_PORT = 8765;
+const UI_ASSETS = new Map([
+  ["/", ["./ui/index.html", "text/html; charset=utf-8"]],
+  ["/app.js", ["./ui/app.js", "text/javascript; charset=utf-8"]],
+  ["/styles.css", ["./ui/styles.css", "text/css; charset=utf-8"]],
+  ["/favicon.svg", ["./ui/favicon.svg", "image/svg+xml"]]
+]);
+const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'";
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": "no-store",
   "X-Content-Type-Options": "nosniff",
-  "Referrer-Policy": "no-referrer"
+  "Referrer-Policy": "no-referrer",
+  "Content-Security-Policy": CSP
 };
 
 function reply(res, status, body) {
@@ -18,6 +27,17 @@ function reply(res, status, body) {
     "Content-Length": Buffer.byteLength(content, "utf8")
   });
   res.end(content);
+}
+
+function replyAsset(res, route) {
+  const [relPath, contentType] = UI_ASSETS.get(route);
+  const body = fs.readFileSync(new URL(relPath, import.meta.url));
+  res.writeHead(200, {
+    ...JSON_HEADERS,
+    "Content-Type": contentType,
+    "Content-Length": body.length
+  });
+  res.end(body);
 }
 
 function badInput() {
@@ -66,7 +86,10 @@ function router(req, res, { store, port, runtime, clock }) {
     const url = new URL(req.url, expectedOrigin);
     const route = url.pathname;
     const noParams = () => exactQuery(url.searchParams, new Set());
-    if (route === "/status") {
+    if (UI_ASSETS.has(route)) {
+      noParams();
+      replyAsset(res, route);
+    } else if (route === "/status") {
       noParams();
       reply(res, 200, {
         ok: true, service: "cce-observability", state: "online",
@@ -77,8 +100,10 @@ function router(req, res, { store, port, runtime, clock }) {
         },
         telemetry: {
           schema_version: TELEMETRY_STORE_VERSION,
-          capture: "inactive"
+          capture: "inactive",
+          ...store.getSettings()
         },
+        listen: { host: HOST, port },
         active_repository: null,
         index_freshness: "unavailable",
         client_identity: "unavailable"
