@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { indexRepository } from "../src/context/indexer.js";
 import { queryContext } from "../src/context/retriever.js";
+import { readIndexStatus } from "../src/context/status.js";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -52,6 +53,15 @@ try {
 
   assert.equal(second.changed_files, 0, JSON.stringify(second));
   assert.equal(second.removed_files, 0, JSON.stringify(second));
+
+  const initialStatus = await readIndexStatus({ repoRoot, indexDir });
+  assert.equal(initialStatus.stale, false, JSON.stringify(initialStatus));
+  assert.ok(initialStatus.runtime.runtime_fingerprint, JSON.stringify(initialStatus));
+  assert.equal(
+    initialStatus.index_provenance.indexed_runtime_fingerprint,
+    initialStatus.runtime.runtime_fingerprint,
+    JSON.stringify(initialStatus)
+  );
 
   const semanticTask = "查找 Semantic Provider 的 CLI 和 MCP 接入代码";
   const semantic = queryContext({
@@ -99,9 +109,22 @@ try {
     ].join("\n")
   );
 
+  const staleWithProbe = await readIndexStatus({ repoRoot, indexDir });
+  assert.equal(staleWithProbe.stale, true, JSON.stringify(staleWithProbe));
+  assert.ok(
+    staleWithProbe.freshness.reasons.added_files >= 1,
+    JSON.stringify(staleWithProbe)
+  );
+  assert.ok(
+    staleWithProbe.freshness.samples.added_files.includes(probeRel),
+    JSON.stringify(staleWithProbe)
+  );
+
   const withProbe = await indexRepository({ repoRoot, indexDir });
   assert.ok(withProbe.changed_files >= 1, JSON.stringify(withProbe));
   assert.equal(withProbe.analysis_failed_files, 0, JSON.stringify(withProbe));
+  const freshWithProbe = await readIndexStatus({ repoRoot, indexDir });
+  assert.equal(freshWithProbe.stale, false, JSON.stringify(freshWithProbe));
 
   const probeTask = "查找 wp19d working tree probe 的测试代码";
   const probeQuery = queryContext({
@@ -120,9 +143,22 @@ try {
   await fs.mkdir(path.dirname(excludePath), { recursive: true });
   await fs.writeFile(excludePath, currentExclude + suffix + "/" + probeRel + "\n");
 
+  const staleAfterIgnore = await readIndexStatus({ repoRoot, indexDir });
+  assert.equal(staleAfterIgnore.stale, true, JSON.stringify(staleAfterIgnore));
+  assert.ok(
+    staleAfterIgnore.freshness.reasons.removed_files >= 1,
+    JSON.stringify(staleAfterIgnore)
+  );
+  assert.ok(
+    staleAfterIgnore.freshness.samples.removed_files.includes(probeRel),
+    JSON.stringify(staleAfterIgnore)
+  );
+
   const ignored = await indexRepository({ repoRoot, indexDir });
   assert.ok(ignored.removed_files >= 1, JSON.stringify(ignored));
   assert.equal(ignored.analysis_failed_files, 0, JSON.stringify(ignored));
+  const freshAfterIgnore = await readIndexStatus({ repoRoot, indexDir });
+  assert.equal(freshAfterIgnore.stale, false, JSON.stringify(freshAfterIgnore));
 
   const ignoredQuery = queryContext({
     repoRoot,
@@ -152,6 +188,14 @@ try {
         manifest_reserved_files: cli.selection.manifest_reserved_files
       }
     ],
+    freshness: {
+      initial_stale: initialStatus.stale,
+      stale_before_probe_reindex: staleWithProbe.stale,
+      fresh_after_probe_reindex: !freshWithProbe.stale,
+      stale_after_local_ignore: staleAfterIgnore.stale,
+      fresh_after_ignore_reindex: !freshAfterIgnore.stale,
+      runtime_fingerprint: initialStatus.runtime.runtime_fingerprint
+    },
     working_tree: {
       probe: probeRel,
       indexed_before_git_add: true,

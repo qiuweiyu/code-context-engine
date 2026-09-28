@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { listTrackedSourceFiles, resolveGitRoot } from "../git.js";
+import { listTrackedSourceFiles, readGitHead, resolveGitRoot } from "../git.js";
 import { isBlockedFile } from "../security.js";
 import { sha256Text } from "./hash.js";
 import { detectLanguage, isTestPath } from "./language.js";
@@ -10,6 +10,7 @@ import { DEFAULT_ANALYZERS, analyzePendingFiles, parserVersionFor } from "./anal
 import { loadFeatureDefinitions, markFeaturesForFileChange, markFeaturesForSymbolChange, refreshFeatureStatus, syncFeatureDefinitions } from "./features.js";
 import { exportIndex } from "./export.js";
 import { rebuildApiRequestEdges, rebuildDbObjectEdges, rebuildDependencyEdges, rebuildEntryPointEdges, rebuildPageApiEdges, rebuildRouteHandlerEdges, rebuildTestEdges } from "./edges.js";
+import { runtimeIdentity } from "../runtime.js";
 
 async function readLocalSource(repoRoot, relPath) {
   const full = path.resolve(repoRoot, relPath);
@@ -726,6 +727,16 @@ export async function indexRepository({ repoRoot, indexDir = ".context-index", f
       .run("repository_root", gitRoot);
     db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)")
       .run("analysis_diagnostics", JSON.stringify(analyzed.diagnostics));
+    const repositoryHead = await readGitHead(gitRoot);
+    const runtime = runtimeIdentity();
+    db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)")
+      .run("repository_head", repositoryHead ?? "");
+    db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)")
+      .run("runtime_fingerprint", runtime.runtime_fingerprint);
+    db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)")
+      .run("runtime_package_version", runtime.package_version);
+    db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)")
+      .run("runtime_git_head", runtime.runtime_git_head ?? "");
     const manifest = await exportIndex(db, outDir);
     return { ok: true, repository: gitRoot, index_dir: outDir, database: dbPath, changed_files: changed, skipped_files: skippedPaths.size, removed_files: removed.length, unreadable_files: unreadable, analysis_failed_files: analyzed.diagnostics.filter((entry) => entry.status !== "complete").length, diagnostics: analyzed.diagnostics, feature_definitions: definitions.length, manifest };
   } finally {
