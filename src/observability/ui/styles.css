@@ -167,6 +167,12 @@ tbody tr:focus-visible { box-shadow: inset 3px 0 var(--indigo); }
 .effect-card .number { font-size: 10px; letter-spacing: .13em; color: var(--indigo); font-weight: 760; }
 .effect-card h3 { font-size: 16px; margin: 18px 0 8px; }
 .effect-placeholder { font-size: 39px; line-height: 1; font-weight: 650; color: #c2cada; margin: 10px 0 8px; }
+.effect-figures { display: grid; gap: 9px; width: 100%; margin: 10px 0 12px; }
+.effect-figures > div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.effect-figures span { color: #8793a8; font-size: 11px; }
+.effect-figures strong { color: #28324d; font-size: 20px; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+.effect-delta { color: #5e5aab; font-size: 12px; margin: 0 0 12px; line-height: 1.5; }
+.effect-card .chip { max-width: 100%; overflow-wrap: anywhere; }
 .effect-card p { font-size: 11px; color: #8b98ac; line-height: 1.7; margin: 0 0 19px; }
 .effect-card .chip { margin-top: auto; }
 .definition-panel { display: flex; gap: 36px; margin-top: 18px; padding: 27px; align-items: flex-start; }

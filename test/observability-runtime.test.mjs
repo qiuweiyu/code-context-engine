@@ -86,6 +86,20 @@ test("real CLI index, status and query produce private correlated traces readabl
     assert.equal(statusApi.client_identity, "unavailable");
     const detail = await (await fetch(api.url + "/requests/" + query.request_id)).json();
     assert.equal(detail.request.events.length, 7);
+    assert.deepEqual(detail.effects[0], {
+      measurement_source: "measured", scope: "cce_output",
+      full_bytes: done.full_bytes, compact_bytes: done.compact_bytes
+    });
+    assert.deepEqual(detail.effects[1], {
+      measurement_source: "estimated", scope: "cce_output",
+      method: "utf8_bytes_div_4_v1",
+      full_tokens: Math.ceil(done.full_bytes / 4),
+      compact_tokens: Math.ceil(done.compact_bytes / 4)
+    });
+    const effects = await (await fetch(api.url + "/effects")).json();
+    assert.equal(effects.query_counts.measured, 1);
+    assert.deepEqual(effects.measurements, detail.effects);
+    assert.equal(effects.controlled_experiment.status, "unavailable");
     const json = JSON.stringify(detail);
     assert.equal(json.includes(privateTask), false);
     assert.equal(json.includes(repo), false);

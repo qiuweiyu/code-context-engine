@@ -92,8 +92,12 @@ test("empty local API is honest about inactive capture and unavailable effects",
   assert.equal(metrics.body.window, "last_24h");
   const effects = await get(api.url + "/effects");
   assert.deepEqual(effects.body, {
-    ok: true, status: "unavailable",
-    reason: "measurement_not_implemented", measurements: []
+    ok: true, status: "unavailable", reason: "no_measured_queries",
+    scope: "retained_history",
+    query_counts: { successful: 0, measured: 0, unmeasured: 0 },
+    measurements: [], controlled_experiment: {
+      status: "unavailable", reason: "not_recorded"
+    }
   });
 });
 
@@ -124,6 +128,12 @@ test("requests pagination, detail and observed metrics use real stored events", 
   assert.equal(metrics.body.average_query_duration_ms, 15);
   assert.equal(JSON.stringify(detail.body).includes(directory), false);
   assert.equal(JSON.stringify(detail.body).includes("source_body"), false);
+  assert.deepEqual(detail.body.effects, []);
+  const effects = await get(api.url + "/effects");
+  assert.deepEqual(effects.body.query_counts, {
+    successful: 2, measured: 0, unmeasured: 2
+  });
+  assert.deepEqual(effects.body.measurements, []);
 });
 
 test("route and input validation do not disclose internals", async (t) => {
@@ -198,4 +208,55 @@ test("status exposes actual retention settings without exposing the database pat
   assert.equal(body.telemetry.max_requests, 5000);
   assert.equal(body.listen.host, "127.0.0.1");
   assert.equal(JSON.stringify(body).includes(directory), false);
+});
+
+test("Effects aggregates only retained measured queries, excluding legacy and failures", async (t) => {
+  const { api, store, directory } = await fixture(t);
+  function measured(n, full_bytes, compact_bytes) {
+    store.appendEvent({
+      ...envelope(n), event_type: "request_started",
+      payload: { operation: "query", query_capture: "unavailable",
+        task_fingerprint: digest }
+    });
+    store.appendEvent({
+      ...envelope(n), event_type: "query_completed",
+      payload: {
+        duration_ms: 2, status: "success", index_freshness: "unavailable",
+        reindexed: "no", must_read_count: 0, maybe_read_count: 0, test_count: 0,
+        full_bytes, compact_bytes,
+        estimated_full_tokens: null, estimated_compact_tokens: null,
+        token_estimation_method: "unavailable", measurement_source: "measured"
+      }
+    });
+    store.appendEvent({
+      ...envelope(n), event_type: "request_completed",
+      payload: { operation: "query", duration_ms: 2, status: "success",
+        error_code: "none" }
+    });
+  }
+  measured(10, 5, 1);
+  measured(11, 6, 1);
+  seed(store, 12, "success"); // Older trace without explicit byte provenance.
+  seed(store, 13, "failure");
+  const response = await get(api.url + "/effects");
+  assert.equal(response.response.status, 200);
+  assert.equal(response.body.status, "available");
+  assert.equal(response.body.scope, "retained_history");
+  assert.deepEqual(response.body.query_counts,
+    { successful: 3, measured: 2, unmeasured: 1 });
+  assert.deepEqual(response.body.measurements, [
+    { measurement_source: "measured", scope: "cce_output",
+      full_bytes: 11, compact_bytes: 2 },
+    { measurement_source: "estimated", scope: "cce_output",
+      method: "utf8_bytes_div_4_v1", full_tokens: 4, compact_tokens: 2 }
+  ]);
+  assert.deepEqual(response.body.controlled_experiment,
+    { status: "unavailable", reason: "not_recorded" });
+  const detail = await get(api.url + "/requests/" + id(10));
+  assert.deepEqual(detail.body.effects[1], {
+    measurement_source: "estimated", scope: "cce_output",
+    method: "utf8_bytes_div_4_v1", full_tokens: 2, compact_tokens: 1
+  });
+  assert.deepEqual((await get(api.url + "/requests/" + id(12))).body.effects, []);
+  assert.equal(JSON.stringify(response.body).includes(directory), false);
 });

@@ -25,14 +25,18 @@ developer interface, not a public or authenticated network service.
 - `GET /requests?limit=50&cursor=...` returns recent stored request
   summaries with a bounded opaque next cursor. Limit is 1–100; no query
   text, source, DB path, or raw error message is exposed.
-- `GET /requests/:id` returns a stored request and its ordered validated
-  events, or 404 for an absent UUID.
+- `GET /requests/:id` returns a stored request, its ordered validated events,
+  and derived Measured/Estimated output effects when eligible, or 404 for
+  an absent UUID.
 - `GET /metrics` returns persisted request counts, query counts,
   failures, last request time, and mean duration of successful queries
   for the rolling last 24 hours. It also reports the all-time count of
   retained requests. An empty average is `null`, not zero.
-- `GET /effects` reports `status: unavailable` and an empty array until
-  WP20-F implements measurement. It makes no token savings claim.
+- `GET /effects` aggregates only explicitly Measured successful query output
+  over retained history. It also derives per-query estimated token counts by
+  the versioned `utf8_bytes_div_4_v1` heuristic and sums them. Its
+  `controlled_experiment.status` remains `unavailable`; no Agent token
+  savings are claimed. See `observability-effects-v1.md`.
 
 For example, `curl http://127.0.0.1:8765/status` reads the local state.
 The API is the stable boundary for WP20-D's UI; the UI does not query SQLite

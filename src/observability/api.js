@@ -2,6 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import { openTelemetryStore, TELEMETRY_STORE_VERSION } from "./store.js";
 import { runtimeIdentity } from "../runtime.js";
+import { effectsFromRequest } from "./effects.js";
 
 const HOST = "127.0.0.1";
 const DEFAULT_PORT = 8765;
@@ -131,7 +132,8 @@ function router(req, res, { store, port, runtime, clock }) {
       }
       const request = store.getRequest(id);
       reply(res, request ? 200 : 404,
-        request ? { ok: true, request } : { ok: false, error: "not_found" });
+        request ? { ok: true, request, effects: effectsFromRequest(request) }
+          : { ok: false, error: "not_found" });
     } else if (route === "/metrics") {
       noParams();
       const now = clock();
@@ -144,10 +146,15 @@ function router(req, res, { store, port, runtime, clock }) {
       });
     } else if (route === "/effects") {
       noParams();
+      const effects = store.getEffects();
+      const available = effects.query_counts.measured > 0;
       reply(res, 200, {
-        ok: true, status: "unavailable",
-        reason: "measurement_not_implemented",
-        measurements: []
+        ok: true, status: available ? "available" : "unavailable",
+        ...(!available ? { reason: "no_measured_queries" } : {}),
+        ...effects,
+        controlled_experiment: {
+          status: "unavailable", reason: "not_recorded"
+        }
       });
     } else {
       reply(res, 404, { ok: false, error: "not_found" });

@@ -87,19 +87,19 @@
           <div class="panel table-panel">
             <div class="table-toolbar"><div><strong>全部请求</strong><span>按时间倒序</span></div><button type="button" class="small-button" id="request-refresh">刷新列表</button></div>
             <div class="table-scroll"><table><thead><tr><th>时间</th><th>操作</th><th>状态</th><th>耗时</th><th>来源</th><th></th></tr></thead><tbody id="request-rows"></tbody></table></div>
-            <div class="empty" id="requests-empty"><span class="empty-illustration">≡</span><strong>暂无请求记录</strong><p>WP20-E 接入 MCP / CLI 后，真实请求会显示在此处。</p></div>
+            <div class="empty" id="requests-empty"><span class="empty-illustration">≡</span><strong>暂无请求记录</strong><p>运行 CCE CLI 或连接 MCP 工具后，刷新列表查看真实请求。</p></div>
             <div class="table-footer"><span id="requests-footnote">尚未采集到请求</span><button type="button" class="small-button" id="load-more" hidden>加载更多</button></div>
           </div>
         </section>
 
         <section class="view" data-view="effects" aria-labelledby="effects-title" hidden>
           <div class="page-heading"><div><span class="eyebrow">EFFECTS & PROVENANCE</span><h1 id="effects-title">收益计量</h1><p>每一个收益数字，都要能说明它从哪里来。</p></div><span class="chip chip-muted">数据优先</span></div>
-          <div class="notice"><span class="notice-icon">i</span><div><strong>目前没有可报告的 Token 收益</strong><p id="effects-note">计量尚未实现。这里不会把输出字节压缩率写成真实模型 Token 节省。</p></div></div>
+          <div class="notice"><span class="notice-icon">i</span><div><strong id="effects-notice-title">等待可计量的查询</strong><p id="effects-note">仅统计当前保留的成功查询；这里的估算不代表真实模型 Token 使用。</p></div></div>
           <div class="section-heading"><div><span class="eyebrow">MEASUREMENT FRAMEWORK</span><h2>三种计量口径</h2></div></div>
           <div class="effect-grid">
-            <article class="panel effect-card"><span class="number">01 / MEASURED</span><h3>CCE 输出压缩</h3><div class="effect-placeholder">—</div><p>比较同一次查询产生的 Full 与 Compact 输出字节。尚未有记录时不计算比例。</p><span class="chip chip-muted">待采集</span></article>
-            <article class="panel effect-card"><span class="number">02 / ESTIMATED</span><h3>Token 估算</h3><div class="effect-placeholder">—</div><p>使用固定估算方法换算输出大小，并始终注明估算方法。当前尚未实现。</p><span class="chip chip-muted">未实现</span></article>
-            <article class="panel effect-card"><span class="number">03 / EXPERIMENT</span><h3>真实 Agent 对比</h3><div class="effect-placeholder">—</div><p>同任务、同 Agent 对比有无 CCE 时的实际读取与完成情况。当前没有实验数据。</p><span class="chip chip-muted">无实验数据</span></article>
+            <article class="panel effect-card"><span class="number">01 / MEASURED</span><h3>CCE 输出字节</h3><div class="effect-figures"><div><span>Full</span><strong id="effects-full-bytes">—</strong></div><div><span>Compact</span><strong id="effects-compact-bytes">—</strong></div></div><strong class="effect-delta" id="effects-byte-delta">—</strong><p>同一查询的两种 CCE JSON 序列化结果，仅代表输出大小。</p><span class="chip chip-muted" id="effects-measured-count">无可计量记录</span></article>
+            <article class="panel effect-card"><span class="number">02 / ESTIMATED</span><h3>估算 Token</h3><div class="effect-figures"><div><span>Full</span><strong id="effects-full-tokens">—</strong></div><div><span>Compact</span><strong id="effects-compact-tokens">—</strong></div></div><strong class="effect-delta" id="effects-token-delta">—</strong><p>逐次按 UTF-8 字节数 ÷ 4 向上取整，再累计。不同模型的实际计费可能不同。</p><span class="chip chip-muted" id="effects-token-method">utf8_bytes_div_4_v1</span></article>
+            <article class="panel effect-card"><span class="number">03 / CONTROLLED EXPERIMENT</span><h3>真实 Agent 对比</h3><div class="effect-placeholder">—</div><p>同任务、同 Agent 对比有无 CCE 时的实际读取与完成情况。当前没有实验数据。</p><span class="chip chip-muted">无实验数据</span></article>
           </div>
           <div class="panel definition-panel"><div><span class="eyebrow">READING THE NUMBERS</span><h3>这些标签意味着什么？</h3></div><dl><div><dt>Measured</dt><dd>CCE 自身实际输出的字节数。</dd></div><div><dt>Estimated</dt><dd>由明确方法换算的 Token 估值，非模型账单。</dd></div><div><dt>Controlled Experiment</dt><dd>同条件的 Agent 工作流对照实验。</dd></div></dl></div>
         </section>
